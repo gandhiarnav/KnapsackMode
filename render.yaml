@@ -1,0 +1,28 @@
+services:
+  # 1. FastAPI Backend Web Service
+  - type: web
+    name: knapsackmode-backend
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    rootDir: backend
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false # You will enter this in the Render Dashboard
+      - key: PYTHON_VERSION
+        value: 3.10.0
+
+  # 2. React (Vite) Frontend Static Site
+  - type: web
+    name: knapsackmode-frontend
+    env: static
+    buildCommand: npm run build
+    publishPath: dist
+    rootDir: frontend
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          name: knapsackmode-backend
+          type: web
+          property: url
+        value: ${value}/api
