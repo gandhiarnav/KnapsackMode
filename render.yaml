@@ -15,9 +15,9 @@ services:
   # 2. React (Vite) Frontend Static Site
   - type: web
     name: knapsackmode-frontend
-    env: static
+    runtime: static
     buildCommand: npm run build
-    publishPath: dist
+    staticPublishPath: dist
     rootDir: frontend
     envVars:
       - key: VITE_API_URL
