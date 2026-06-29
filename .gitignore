@@ -1,1 +1,14 @@
-implementation_plan.md
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Editor
+.DS_Store
+*.swp
