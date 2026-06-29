@@ -21,8 +21,4 @@ services:
     rootDir: frontend
     envVars:
       - key: VITE_API_URL
-        fromService:
-          name: knapsackmode-backend
-          type: web
-          property: url
-        value: ${value}/api
+        sync: false # Set this to https://<knapsackmode-backend>.onrender.com/api in the Render Dashboard after the backend deploys
