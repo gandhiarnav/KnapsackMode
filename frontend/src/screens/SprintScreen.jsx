@@ -241,7 +241,7 @@ function QuizCard({ q, index }) {
   )
 }
 
-function QuizTab({ topic, depthLevel, importance }) {
+function QuizTab({ topic, depthLevel, importance, contextType = 'exam' }) {
   const [questions, setQuestions] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -250,10 +250,10 @@ function QuizTab({ topic, depthLevel, importance }) {
     setQuestions([])
     setLoading(true)
     setError(null)
-    getQuiz(topic, depthLevel, importance)
+    getQuiz(topic, depthLevel, importance, contextType)
       .then(qs => { setQuestions(qs); setLoading(false) })
       .catch(err => { setError(err.message); setLoading(false) })
-  }, [topic, depthLevel])
+  }, [topic, depthLevel, contextType])
 
   if (loading) {
     return (
@@ -322,48 +322,118 @@ function Confetti() {
   )
 }
 
-// ── Completion Screen ─────────────────────────────────────────────────────────
-function CompletionScreen({ completed, skipped, totalBudget, onRestart }) {
+// ── Completion Screen (v2 — Analytics Dashboard) ───────────────────────────
+function CompletionScreen({ completed, skipped, analytics, totalBudget, onRestart }) {
+  // Compute efficiency: importance points covered vs total
+  const allTopics = [...completed, ...skipped]
+  const totalImportance = allTopics.reduce((s, t) => s + (t.importance || 0), 0)
+  const coveredImportance = completed.reduce((s, t) => s + (t.importance || 0), 0)
+  const efficiencyPct = totalImportance > 0 ? Math.round((coveredImportance / totalImportance) * 100) : 0
+
+  // Topics that need review (skipped or took longer than allocated)
+  const reviewList = [
+    ...skipped.map(t => t.topic),
+    ...analytics.filter(a => a.outcome === 'got_it' && a.timeSpent > a.allocated + 2).map(a => a.topic),
+  ]
+
+  const outcomeIcon = { got_it: '✅', skipped: '⏭', extended: '⏱' }
+
   return (
     <>
       <Confetti />
-      <div className="page" style={{ justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>
-        <div className="card gap-lg" style={{ maxWidth: 500, margin: '0 auto' }}>
-          <div style={{ fontSize: '4rem' }}>🎉</div>
-          <h2>Sprint Complete!</h2>
-          <p>You powered through your study sprint. Here's how it went:</p>
+      <div className="page" style={{ paddingTop: '2.5rem' }}>
+        <div style={{ maxWidth: 620, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
 
-          <div className="stat-grid">
-            <div className="stat-item">
-              <div className="stat-value" style={{ color: 'var(--green)' }}>{completed.length}</div>
-              <div className="stat-label">Topics Covered</div>
-            </div>
-            <div className="stat-item">
-              <div className="stat-value" style={{ color: 'var(--text-muted)' }}>{skipped.length}</div>
-              <div className="stat-label">Skipped</div>
-            </div>
-            <div className="stat-item">
-              <div className="stat-value" style={{ color: 'var(--amber-light)' }}>{totalBudget}</div>
-              <div className="stat-label">Min Budget</div>
+          {/* Hero */}
+          <div className="card" style={{ textAlign: 'center', padding: '2rem 1.5rem' }}>
+            <div style={{ fontSize: '3.5rem', marginBottom: '0.5rem' }}>🎉</div>
+            <h2 style={{ marginBottom: '0.25rem' }}>Sprint Complete!</h2>
+            <p className="text-muted">Here's how you did.</p>
+          </div>
+
+          {/* Key stats */}
+          <div className="card">
+            <div className="stat-grid">
+              <div className="stat-item">
+                <div className="stat-value" style={{ color: 'var(--green)' }}>{efficiencyPct}%</div>
+                <div className="stat-label">Importance covered</div>
+              </div>
+              <div className="stat-item">
+                <div className="stat-value" style={{ color: 'var(--accent-light)' }}>{completed.length}</div>
+                <div className="stat-label">Topics done</div>
+              </div>
+              <div className="stat-item">
+                <div className="stat-value" style={{ color: 'var(--text-muted)' }}>{skipped.length}</div>
+                <div className="stat-label">Skipped</div>
+              </div>
+              <div className="stat-item">
+                <div className="stat-value" style={{ color: 'var(--amber-light)' }}>{totalBudget}</div>
+                <div className="stat-label">Min budget</div>
+              </div>
             </div>
           </div>
 
-          {completed.length > 0 && (
-            <div style={{ textAlign: 'left' }}>
-              <p className="text-muted text-sm" style={{ marginBottom: '0.5rem' }}>Topics covered:</p>
-              {completed.map(t => (
-                <div key={t.topic} className="row" style={{ padding: '0.3rem 0', fontSize: '0.9rem' }}>
-                  <span style={{ color: 'var(--green)' }}>✓</span>
-                  <span>{t.topic}</span>
-                  <span className="text-muted" style={{ marginLeft: 'auto' }}>
-                    {DEPTH_LABELS[t.depth_level]?.icon} {t.allocated_minutes}m
+          {/* Per-topic outcome table */}
+          {analytics.length > 0 && (
+            <div className="card gap-sm">
+              <h3 style={{ marginBottom: '0.5rem' }}>Topic Breakdown</h3>
+              {analytics.map((a, i) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: '0.75rem',
+                  padding: '0.5rem 0.75rem',
+                  background: a.outcome === 'got_it' ? 'rgba(16,185,129,0.06)' : 'rgba(239,68,68,0.04)',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '0.88rem',
+                }}>
+                  <span style={{ fontSize: '1rem' }}>{outcomeIcon[a.outcome] || '✅'}</span>
+                  <span style={{ flex: 1, color: 'var(--text-primary)', fontWeight: 500 }}>{a.topic}</span>
+                  <span className="badge badge-ghost" style={{ fontSize: '0.7rem' }}>★{a.importance}</span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                    {a.timeSpent}m / {a.allocated}m
                   </span>
+                </div>
+              ))}
+              {skipped.map((t, i) => (
+                <div key={`skip-${i}`} style={{
+                  display: 'flex', alignItems: 'center', gap: '0.75rem',
+                  padding: '0.5rem 0.75rem',
+                  background: 'rgba(148,163,184,0.06)',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '0.88rem',
+                }}>
+                  <span>⏭</span>
+                  <span style={{ flex: 1, color: 'var(--text-muted)' }}>{t.topic}</span>
+                  <span className="badge badge-ghost" style={{ fontSize: '0.7rem' }}>★{t.importance}</span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>skipped</span>
                 </div>
               ))}
             </div>
           )}
 
-          <button id="restart-btn" className="btn btn-primary" onClick={onRestart} style={{ width: '100%', justifyContent: 'center' }}>
+          {/* Review list */}
+          {reviewList.length > 0 && (
+            <div className="card-glass" style={{ padding: '1rem 1.25rem' }}>
+              <div className="row-between" style={{ marginBottom: '0.5rem' }}>
+                <h3 style={{ fontSize: '0.9rem' }}>📋 Review Tomorrow</h3>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: '0.75rem' }}
+                  onClick={() => navigator.clipboard?.writeText(reviewList.join('\n'))}
+                >
+                  📋 Copy
+                </button>
+              </div>
+              <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                {reviewList.map((topic, i) => (
+                  <li key={i} style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', gap: '0.5rem' }}>
+                    <span style={{ color: 'var(--amber)' }}>→</span> {topic}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <button id="restart-btn" className="btn btn-primary btn-lg" onClick={onRestart} style={{ width: '100%', justifyContent: 'center' }}>
             ⚡ New Sprint
           </button>
         </div>
@@ -373,7 +443,7 @@ function CompletionScreen({ completed, skipped, totalBudget, onRestart }) {
 }
 
 // ── Main SprintScreen ─────────────────────────────────────────────────────────
-export default function SprintScreen({ topics, initialPlan, totalBudget, onRestart }) {
+export default function SprintScreen({ topics, initialPlan, totalBudget, contextType = 'exam', onRestart }) {
   const [plan, setPlan] = useState(initialPlan) // remaining plan (shrinks as topics complete)
   const [completedTopics, setCompletedTopics] = useState([])
   const [skippedTopics, setSkippedTopics] = useState([])
@@ -384,6 +454,10 @@ export default function SprintScreen({ topics, initialPlan, totalBudget, onResta
   const [cardLoading, setCardLoading] = useState(true)
   const [cardError, setCardError] = useState(null)
   const [activeTab, setActiveTab] = useState('card') // 'card' | 'quiz'
+
+  // Analytics: track time spent and outcome per topic
+  const [topicAnalytics, setTopicAnalytics] = useState([]) // {topic, outcome, timeSpent, allocated}
+  const topicStartTimeRef = useRef(Date.now())
 
   // Timer state
   const currentTopic = plan[0]
@@ -404,8 +478,9 @@ export default function SprintScreen({ topics, initialPlan, totalBudget, onResta
     setActiveTab('card')           // reset to card view on each new topic
     setRemainingSeconds(currentTopic.allocated_minutes * 60)
     setTimerActive(true)
+    topicStartTimeRef.current = Date.now()
 
-    getStudyCard(currentTopic.topic, currentTopic.depth_level, currentTopic.allocated_minutes)
+    getStudyCard(currentTopic.topic, currentTopic.depth_level, currentTopic.allocated_minutes, contextType)
       .then(card => { setStudyCard(card); setCardLoading(false) })
       .catch(err => { setCardError(err.message); setCardLoading(false) })
   }, [currentTopic?.topic, currentTopic?.depth_level, currentTopic?.allocated_minutes])
@@ -432,7 +507,7 @@ export default function SprintScreen({ topics, initialPlan, totalBudget, onResta
       return []
     }
     try {
-      const newPlan = await allocate(remainingTopics, remainingBudget)
+      const newPlan = await allocate(remainingTopics, remainingBudget, contextType)
       setPlan(newPlan)
       return newPlan
     } catch {
@@ -440,7 +515,21 @@ export default function SprintScreen({ topics, initialPlan, totalBudget, onResta
       setPlan(remainingTopics)
       return remainingTopics
     }
-  }, [])
+  }, [contextType])
+
+  // ── Keyboard shortcuts ─────────────────────────────────────────────────────
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+      if (e.key === 'g' || e.key === 'G') handleGotIt()
+      if (e.key === 'm' || e.key === 'M') handleNeedMoreTime()
+      if (e.key === 's' || e.key === 'S') handleSkip()
+      if (e.key === '1') setActiveTab('card')
+      if (e.key === '2') setActiveTab('quiz')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [handleGotIt, handleNeedMoreTime, handleSkip])
 
   // ── Controls ──────────────────────────────────────────────────────────────
   const handleGotIt = useCallback(async () => {
@@ -451,6 +540,14 @@ export default function SprintScreen({ topics, initialPlan, totalBudget, onResta
     const topicUsed = currentTopic.allocated_minutes - savedTime
     const newBudgetUsed = budgetUsed + topicUsed
     setBudgetUsed(newBudgetUsed)
+
+    // Record analytics
+    const timeSpentSec = Math.round((Date.now() - topicStartTimeRef.current) / 1000)
+    setTopicAnalytics(prev => [...prev, {
+      topic: currentTopic.topic, outcome: 'got_it',
+      timeSpent: Math.round(timeSpentSec / 60), allocated: currentTopic.allocated_minutes,
+      importance: currentTopic.importance,
+    }])
 
     setCompletedTopics(prev => [...prev, currentTopic])
 
@@ -499,6 +596,14 @@ export default function SprintScreen({ topics, initialPlan, totalBudget, onResta
     clearInterval(timerRef.current)
     setTimerActive(false)
 
+    // Record analytics for skip
+    const timeSpentSec = Math.round((Date.now() - topicStartTimeRef.current) / 1000)
+    setTopicAnalytics(prev => [...prev, {
+      topic: currentTopic.topic, outcome: 'skipped',
+      timeSpent: Math.round(timeSpentSec / 60), allocated: currentTopic.allocated_minutes,
+      importance: currentTopic.importance,
+    }])
+
     setSkippedTopics(prev => [...prev, currentTopic])
     const savedTime = currentTopic.allocated_minutes
 
@@ -525,6 +630,7 @@ export default function SprintScreen({ topics, initialPlan, totalBudget, onResta
       <CompletionScreen
         completed={completedTopics}
         skipped={skippedTopics}
+        analytics={topicAnalytics}
         totalBudget={totalBudget}
         onRestart={onRestart}
       />
@@ -656,6 +762,7 @@ export default function SprintScreen({ topics, initialPlan, totalBudget, onResta
                 topic={currentTopic.topic}
                 depthLevel={currentTopic.depth_level}
                 importance={currentTopic.importance}
+                contextType={contextType}
               />
             )}
           </div>

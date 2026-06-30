@@ -13,6 +13,7 @@ class StudyCardRequest(BaseModel):
     topic: str = Field(..., min_length=1)
     depth_level: str = Field(..., description="skim | standard | deep")
     allocated_minutes: int = Field(..., ge=1)
+    context_type: str = Field("exam", description="'exam' or 'interview'")
 
 
 class StudyCardResponse(BaseModel):
@@ -26,8 +27,9 @@ async def study_card_endpoint(req: StudyCardRequest):
             status_code=422,
             detail=f"depth_level must be one of: {', '.join(VALID_DEPTHS)}"
         )
+    ctx = req.context_type if req.context_type in ("exam", "interview") else "exam"
     try:
-        card = await generate_study_card(req.topic, req.depth_level, req.allocated_minutes)
+        card = await generate_study_card(req.topic, req.depth_level, req.allocated_minutes, ctx)
         return StudyCardResponse(card=card)
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))

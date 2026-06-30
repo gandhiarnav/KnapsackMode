@@ -98,7 +98,13 @@ function RatingDots({ value, max = 10, color = '#6366f1' }) {
 }
 
 // ── Main InputScreen Component ────────────────────────────────────────────────
-export default function InputScreen({ rawText, setRawText, timeBudget, setTimeBudget, onPlanReady }) {
+export default function InputScreen({
+  rawText, setRawText,
+  timeBudget, setTimeBudget,
+  contextType, setContextType,
+  onPlanReady,
+  resumeSession, onResume, onDismissResume,
+}) {
   const [loading, setLoading] = useState(false)
   const [loadingStage, setLoadingStage] = useState('') // 'extracting' | 'allocating'
   const [error, setError] = useState(null)
@@ -117,9 +123,9 @@ export default function InputScreen({ rawText, setRawText, timeBudget, setTimeBu
     setLoading(true)
 
     try {
-      // Step 1: Extract topics via Gemini
+      // Step 1: Extract topics via Gemini (with context)
       setLoadingStage('extracting')
-      const topics = await extractTopics(rawText, timeBudget)
+      const topics = await extractTopics(rawText, timeBudget, contextType)
 
       if (!topics || topics.length === 0) {
         throw new Error('No topics found. Try pasting more detailed content.')
@@ -143,6 +149,31 @@ export default function InputScreen({ rawText, setRawText, timeBudget, setTimeBu
 
   return (
     <div className="page" style={{ justifyContent: 'center', paddingTop: '3rem' }}>
+
+      {/* ── Resume Banner ── */}
+      {resumeSession && (
+        <div style={{
+          background: 'rgba(99,102,241,0.1)',
+          border: '1px solid rgba(99,102,241,0.3)',
+          borderRadius: 'var(--radius-md)',
+          padding: '0.85rem 1.1rem',
+          marginBottom: '1.25rem',
+          display: 'flex', alignItems: 'center', gap: '0.75rem',
+        }}>
+          <span style={{ fontSize: '1.2rem' }}>↩</span>
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+              You have an unfinished sprint
+            </p>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: 0 }}>
+              {resumeSession.topics?.length || 0} topics · {resumeSession.timeBudget} min budget
+              {resumeSession.contextType === 'interview' ? ' · 💼 Interview Prep' : ' · 📚 Exam Prep'}
+            </p>
+          </div>
+          <button className="btn btn-primary btn-sm" onClick={onResume}>Resume →</button>
+          <button className="btn btn-ghost btn-sm" onClick={onDismissResume} title="Discard session">✕</button>
+        </div>
+      )}
       {/* ── Hero ── */}
       <div className="gap-sm" style={{ marginBottom: '2.5rem', textAlign: 'center', alignItems: 'center' }}>
         <div className="hero-logo">⚡ KnapsackMode</div>
@@ -217,7 +248,42 @@ export default function InputScreen({ rawText, setRawText, timeBudget, setTimeBu
           </div>
         </div>
 
-        {/* Error */}
+        {/* Context Mode Toggle */}
+        <div className="form-field">
+          <label style={{ marginBottom: '0.6rem', display: 'block' }}>What are you prepping for?</label>
+          <div className="row" style={{ gap: 0, background: 'var(--bg-base)', borderRadius: 'var(--radius-sm)', padding: 4, border: '1px solid var(--border)', width: 'fit-content' }}>
+            {[
+              { value: 'exam',      label: '📚 Exam Prep' },
+              { value: 'interview', label: '💼 Interview Prep' },
+            ].map(opt => (
+              <button
+                key={opt.value}
+                id={`context-${opt.value}`}
+                onClick={() => setContextType(opt.value)}
+                disabled={loading}
+                style={{
+                  padding: '0.45rem 1.1rem',
+                  borderRadius: 'var(--radius-sm)',
+                  border: 'none',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  fontFamily: 'inherit',
+                  fontSize: '0.88rem',
+                  fontWeight: 600,
+                  transition: 'all 0.2s ease',
+                  background: contextType === opt.value ? 'var(--accent)' : 'transparent',
+                  color: contextType === opt.value ? 'white' : 'var(--text-muted)',
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-muted" style={{ fontSize: '0.75rem', marginTop: '0.35rem' }}>
+            {contextType === 'interview'
+              ? 'Tunes study cards and questions for technical + behavioral interview format.'
+              : 'Tunes study cards and questions for fact-based exam recall.'}
+          </p>
+        </div>
         {error && (
           <div className="toast-error" style={{ borderRadius: 'var(--radius-md)', padding: '0.75rem 1rem', position: 'static' }}>
             ⚠️ {error}

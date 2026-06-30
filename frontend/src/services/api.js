@@ -21,12 +21,14 @@ async function post(path, body) {
 
 /**
  * LLM Call #1 — Extract and score topics from raw study material.
+ * @param {string} contextType - 'exam' | 'interview'
  * @returns {Promise<Array<{topic, importance, difficulty, time_needed_minutes}>>}
  */
-export async function extractTopics(rawText, timeBudget) {
+export async function extractTopics(rawText, timeBudget, contextType = "exam") {
   const data = await post("/extract-topics", {
     raw_text: rawText,
     time_budget: timeBudget,
+    context_type: contextType,
   });
   return data.topics;
 }
@@ -46,27 +48,30 @@ export async function allocate(topics, timeBudget) {
 
 /**
  * LLM Call #2 — Generate a focused study card for a single topic.
+ * @param {string} contextType - 'exam' | 'interview'
  * @returns {Promise<string>} Markdown bullet-point card
  */
-export async function getStudyCard(topic, depthLevel, allocatedMinutes) {
+export async function getStudyCard(topic, depthLevel, allocatedMinutes, contextType = "exam") {
   const data = await post("/study-card", {
     topic,
     depth_level: depthLevel,
     allocated_minutes: allocatedMinutes,
+    context_type: contextType,
   });
   return data.card;
 }
 
 /**
  * LLM Call #3 — Generate practice questions for a topic.
- * Auto-detects interview vs study context from the topic name.
+ * @param {string} contextType - 'exam' | 'interview' (overrides auto-detect)
  * @returns {Promise<Array<{question, hint, answer}>>}
  */
-export async function getQuiz(topic, depthLevel, importance = 5) {
+export async function getQuiz(topic, depthLevel, importance = 5, contextType = "exam") {
   const data = await post("/quiz", {
     topic,
     depth_level: depthLevel,
     importance,
+    context_type: contextType,
   });
   return data.questions;
 }

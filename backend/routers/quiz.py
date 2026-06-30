@@ -13,6 +13,7 @@ class QuizRequest(BaseModel):
     topic: str = Field(..., min_length=1)
     depth_level: str = Field(..., description="skim | standard | deep")
     importance: int = Field(5, ge=1, le=10)
+    context_type: str = Field("exam", description="'exam' or 'interview'")
 
 
 class QuizResponse(BaseModel):
@@ -26,8 +27,9 @@ async def quiz_endpoint(req: QuizRequest):
             status_code=422,
             detail=f"depth_level must be one of: {', '.join(VALID_DEPTHS)}"
         )
+    ctx = req.context_type if req.context_type in ("exam", "interview") else "exam"
     try:
-        questions = await generate_quiz(req.topic, req.depth_level, req.importance)
+        questions = await generate_quiz(req.topic, req.depth_level, req.importance, ctx)
         return QuizResponse(questions=questions)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
