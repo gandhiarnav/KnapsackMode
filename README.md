@@ -1,117 +1,254 @@
-# Project: KnapsackMode — Last-Minute Exam/Interview Prep Compressor
+# KnapsackMode 🎒
 
-## Overview
-KnapsackMode helps someone with very little time left before an exam, interview, or test
-study as efficiently as possible. The user pastes in raw study material (notes, a
-syllabus, a job description, slides, etc.) and tells the app how much time they have.
-The app breaks the material into topics, scores each topic on importance and
-difficulty, and then runs a **time-allocation algorithm** to generate a prioritized,
-time-boxed "study sprint" — e.g. "spend 12 min on Topic A, 5 min on Topic B" — instead
-of just summarizing everything evenly.
+> **Last-minute exam & interview prep — optimized, not just summarized.**
 
-This is NOT just a summarizer. The core value is the **optimization layer**: deciding
-what to study, in what order, and for how long, given a hard time constraint.
+KnapsackMode takes your raw study material and a time budget, then uses a **knapsack-style dynamic programming algorithm** to tell you exactly what to study, in what order, and for how long. It's not a summarizer — it's a time optimizer.
 
-## Target track
-"Last-Minute Life Saver" — urgent, time-pressured personal help. No location/maps
-needed.
+---
 
-## Core technical components (build these in order)
+## Features
 
-### 1. Topic extraction & scoring (LLM call #1)
-- Input: raw pasted text (notes/syllabus/job description) + optional user time budget
-- Use an LLM call with a structured JSON output (no prose, just JSON) to extract a
-  list of topics/concepts from the text.
-- For each topic, the LLM should estimate:
-  - `importance` (1-10): how likely this is to matter / be tested / be asked about.
-    Infer from repetition, emphasis, position in the document, or for job
-    descriptions, "required" vs "nice to have" language.
-  - `difficulty` (1-10): how hard/unfamiliar this topic likely is, OR let the user
-    self-rate this per topic in the UI (simpler, more reliable).
-  - `time_needed_minutes`: LLM's estimate of how many minutes it would take to
-    adequately learn this topic from scratch.
-- Output format: a JSON array of objects like
-  `{ "topic": string, "importance": number, "difficulty": number, "time_needed_minutes": number }`
+- **Topic Extraction & Scoring** — Paste any notes, syllabus, or job description; Gemini AI extracts topics and scores each by importance, difficulty, and estimated study time.
+- **Knapsack Optimization** — A custom DP algorithm allocates your time budget across topics at varying depths (skim / review / deep), maximizing total value covered within your constraint.
+- **Sprint Mode** — A countdown-driven study interface that walks you through each topic with AI-generated study cards tailored to the allocated depth level.
+- **Dynamic Re-allocation** — Hit "Need More Time" or "Got It" early, and the algorithm instantly re-optimizes the remaining plan with the updated time budget.
+- **Quick-Fire Quiz** — End-of-sprint quiz generated from your studied topics to test retention.
+- **Session Persistence** — Study sessions are saved locally so you can resume where you left off.
+- **Exam & Interview Modes** — Context-aware prompts tune topic scoring and study cards for either mode.
 
-### 2. Time allocation algorithm (write this yourself — plain code, NOT an LLM call)
-This is the most important piece for demonstrating technical depth. Do not outsource
-this logic to the LLM — write it as a real algorithm.
+---
 
-- Input: total available time `T` (minutes), list of topics with
-  `(importance, difficulty, time_needed)`.
-- Goal: maximize total "importance covered" within the time budget `T`.
-- Make it a **knapsack-style allocation with partial coverage**, not a strict
-  binary knapsack:
-  - Each topic can be studied at different depths: e.g. "skim" (covers ~40% of the
-    topic's value in ~25% of the full time_needed) vs "deep" (100% of value, 100% of
-    time). Model this as 2-3 discrete depth levels per topic, each with its own
-    (time_cost, value_gained) pair.
-  - Run a dynamic programming knapsack over all (topic, depth) options to pick the
-    combination that maximizes total value within time `T`.
-  - Sort the resulting plan by a sensible study order (e.g. highest
-    importance-per-minute first, or hardest-but-important topics earlier when focus
-    is highest — pick one and justify it briefly in code comments).
-- Output: an ordered list of `{ topic, allocated_minutes, depth_level }`.
+## 🏗️ Architecture
 
-### 3. Sprint mode UI
-- A countdown-driven interface that walks the user through the allocated topics in
-  order.
-- For each topic, show condensed study content. This is LLM call #2: generate a
-  tight "study card" per topic (key facts/points only, not a full explanation) sized
-  to fit the allocated depth level and time.
-- Per-topic controls: "Got it" (move on early) and "Need more time" (extend this
-  topic).
-- **Dynamic re-allocation**: when the user hits "Need more time" or "Got it" early,
-  re-run the Step 2 allocation algorithm on the *remaining* topics with the
-  *remaining* time budget. This live re-optimization is the standout technical/demo
-  feature — make sure it's visibly working in the UI (e.g. show the plan update in
-  real time).
+```
+KnapsackMode/
+├── backend/          # FastAPI + Python — AI calls & allocation logic
+│   ├── main.py           # App entry point, CORS, router registration
+│   ├── routers/
+│   │   ├── extract.py    # POST /api/extract-topics
+│   │   ├── allocate.py   # POST /api/allocate
+│   │   ├── studycard.py  # POST /api/study-card
+│   │   └── quiz.py       # POST /api/quiz
+│   ├── services/
+│   │   └── gemini.py     # All Gemini AI calls (extraction, study cards, quiz)
+│   ├── Dockerfile
+│   └── requirements.txt
+│
+└── frontend/         # React + Vite — UI
+    └── src/
+        ├── App.jsx           # State machine: input → plan → sprint
+        ├── screens/
+        │   ├── InputScreen.jsx   # Paste material + set time budget
+        │   ├── PlanScreen.jsx    # Review & edit the generated plan
+        │   └── SprintScreen.jsx  # Countdown timer + study cards + re-allocation
+        ├── hooks/
+        │   └── useSession.js     # LocalStorage session persistence
+        └── services/             # API client
+```
 
-## Suggested stack
-Keep this lightweight — 2 days total.
-- Frontend: React (or a single HTML file with vanilla JS if you want to move even
-  faster). No need for a component library or heavy styling — clean and functional
-  beats fancy.
-- LLM calls: call the Claude API directly (use structured JSON output prompts for
-  Step 1 and the study-card generation in Step 3).
-- Allocation algorithm: plain JavaScript or Python function. No external library
-  needed — a DP knapsack variant is roughly 30-50 lines of code.
-- No database needed — everything can live in client-side state for the demo.
-- No location/maps/geolocation APIs needed.
+### How the Algorithm Works
 
-## Build order / timeline
+The core time-allocation engine is a **bounded knapsack with partial coverage**:
 
-**Day 1 — Core logic**
-1. Input screen: textarea for pasted material + input for total time available
-   (minutes).
-2. Implement LLM call #1 (topic extraction + scoring), parse JSON response.
-3. Implement the time allocation algorithm (Step 2) as a standalone, testable
-   function — test it with a few hardcoded topic lists before wiring it to the UI.
-4. Render the initial output: ordered list of topics with allocated time per topic.
+1. Each topic is expanded into 2–3 discrete depth levels — e.g. *skim* (40% value, 25% time) and *deep* (100% value, 100% time).
+2. A DP knapsack runs over all `(topic, depth)` pairs to find the combination that **maximizes total importance covered** within the time budget.
+3. The resulting plan is sorted by importance-per-minute (most efficient first).
+4. When the user skips ahead or asks for more time, **Step 2 re-runs live** on remaining topics with the updated remaining time.
 
-**Day 2 — Sprint mode + dynamic re-allocation + polish**
-1. Build the Sprint mode UI: countdown timer per topic, condensed study card display
-   (LLM call #2).
-2. Wire up "Got it" / "Need more time" buttons to trigger re-allocation of remaining
-   time across remaining topics. Make the re-plan visibly update on screen.
-3. Prepare 1-2 strong example inputs (e.g. a messy CS syllabus, a real job
-   description) so the live demo doesn't depend on typing/uploading content live.
-4. Polish: loading states for LLM calls, basic empty/error states, a clean visual
-   pass on the input and sprint screens.
+---
 
-## Demo script (for presentation)
-1. Paste in a pre-loaded example (messy syllabus or job description), set time to
-   something tight (e.g. 45 minutes).
-2. Show the generated topic list with importance/difficulty/time scores.
-3. Show the allocated sprint plan (ordered topics + time per topic) — explain this is
-   a knapsack-style optimization, not just an even split.
-4. Start Sprint mode, click through a topic or two, hit "Need more time" on one and
-   show the plan dynamically re-allocate remaining time across remaining topics.
-5. Close on the core pitch: "It doesn't just summarize — it decides what's worth your
-   time when you don't have much of it."
+## 🚀 Live Deployment
 
-## What NOT to spend time on
-- No location, maps, or geolocation — not needed for this idea.
-- No user accounts/auth — not needed for a demo.
-- No database persistence — client-side state is enough.
-- No need for multiple LLM providers — one clean Claude API integration is enough.
+| Service | URL |
+|---------|-----|
+| **Backend API** | `https://knapsackmode-backend-967643216830.us-central1.run.app` |
+| **API Docs (Swagger)** | `https://knapsackmode-backend-967643216830.us-central1.run.app/docs` |
+| **Frontend** | Hosted on Firebase (project: `knapsackmode-501016`) |
+
+---
+
+## 🛠️ Local Development
+
+### Prerequisites
+
+- Python 3.10+
+- Node.js 18+
+- A [Gemini API key](https://aistudio.google.com)
+
+### Backend
+
+```bash
+cd backend
+
+# Create and activate a virtual environment
+python -m venv venv
+source venv/bin/activate      # Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Configure environment
+cp .env.example .env
+# Edit .env and add your GEMINI_API_KEY
+
+# Start the dev server
+uvicorn main:app --reload --port 8000
+```
+
+The API will be available at `http://localhost:8000`. Interactive docs at `http://localhost:8000/docs`.
+
+### Frontend
+
+```bash
+cd frontend
+
+# Install dependencies
+npm install
+
+# Start the Vite dev server
+npm run dev
+```
+
+The app will be available at `http://localhost:5173`.
+
+> By default the frontend calls the **deployed backend**. To point it at your local backend instead, set `VITE_API_BASE_URL=http://localhost:8000` in `frontend/.env.local`.
+
+---
+
+## ⚙️ Environment Variables
+
+### Backend (`backend/.env`)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GEMINI_API_KEY` | ✅ Yes | Your Gemini API key from [aistudio.google.com](https://aistudio.google.com) |
+| `GEMINI_MODEL` | No | Model override. Default: `gemini-1.5-flash`. Options: `gemini-1.5-flash`, `gemini-1.5-flash-8b`, `gemini-2.0-flash`, `gemini-2.5-flash` |
+| `FRONTEND_URL` | No | Deployed frontend URL — added to CORS allowed origins |
+
+---
+
+## 📡 API Reference
+
+All endpoints are prefixed with `/api`. A full interactive reference is available at `/docs`.
+
+### `POST /api/extract-topics`
+Extracts topics from raw study material and scores each one.
+
+**Request body:**
+```json
+{
+  "raw_text": "Your notes, syllabus, or job description...",
+  "time_budget": 45,
+  "context_type": "exam"
+}
+```
+- `context_type`: `"exam"` | `"interview"`
+
+**Response:**
+```json
+{
+  "topics": [
+    {
+      "topic": "Binary Search Trees",
+      "importance": 9,
+      "difficulty": 7,
+      "time_needed_minutes": 20
+    }
+  ]
+}
+```
+
+---
+
+### `POST /api/allocate`
+Runs the knapsack optimization algorithm on a list of topics.
+
+**Request body:**
+```json
+{
+  "topics": [...],
+  "time_budget": 45
+}
+```
+
+**Response:** An ordered list of `{ topic, allocated_minutes, depth_level }`.
+
+---
+
+### `POST /api/study-card`
+Generates a condensed study card for a topic at a given depth level.
+
+**Request body:**
+```json
+{
+  "topic": "Binary Search Trees",
+  "depth_level": "skim",
+  "context_type": "exam",
+  "allocated_minutes": 8
+}
+```
+
+---
+
+### `POST /api/quiz`
+Generates a quick quiz based on the topics covered in the sprint.
+
+---
+
+### `GET /api/health`
+Health check. Returns `{ "status": "ok", "service": "KnapsackMode API" }`.
+
+---
+
+## ☁️ Deployment
+
+### Backend — Google Cloud Run
+
+The backend is containerized and deployed to Cloud Run.
+
+```bash
+cd backend
+
+# Build and push the Docker image
+gcloud builds submit --tag gcr.io/<PROJECT_ID>/knapsackmode-backend
+
+# Deploy to Cloud Run
+gcloud run deploy knapsackmode-backend \
+  --image gcr.io/<PROJECT_ID>/knapsackmode-backend \
+  --platform managed \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --set-env-vars GEMINI_API_KEY=<your_key>,FRONTEND_URL=<your_frontend_url>
+```
+
+### Frontend — Firebase Hosting
+
+```bash
+cd frontend
+
+# Build production bundle
+npm run build
+
+# Deploy to Firebase
+firebase deploy
+```
+
+---
+
+## 🧰 Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 19, Vite 6 |
+| Styling | Vanilla CSS |
+| Backend | FastAPI, Python 3.10 |
+| AI | Google Gemini (`google-genai >= 2.0.0`) |
+| Containerization | Docker |
+| Backend Hosting | Google Cloud Run |
+| Frontend Hosting | Firebase Hosting |
+
+---
+
+## 📄 License
+
+MIT
