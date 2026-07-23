@@ -59,11 +59,11 @@ The core time-allocation engine is a **bounded knapsack with partial coverage**:
 
 ## 🚀 Live Deployment
 
-| Service | URL |
-|---------|-----|
-| **Backend API** | `https://knapsackmode-backend-967643216830.us-central1.run.app` |
+| Service                | URL                                                                  |
+| ------------------------| ----------------------------------------------------------------------|
+| **Backend API**        | `https://knapsackmode-backend-967643216830.us-central1.run.app`      |
 | **API Docs (Swagger)** | `https://knapsackmode-backend-967643216830.us-central1.run.app/docs` |
-| **Frontend** | https://knapsackmode-501016.web.app |
+| **Frontend**           | https://knapsackmode-501016.web.app                                  |
 
 ---
 
