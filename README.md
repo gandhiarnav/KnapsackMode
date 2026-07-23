@@ -63,7 +63,7 @@ The core time-allocation engine is a **bounded knapsack with partial coverage**:
 |---------|-----|
 | **Backend API** | `https://knapsackmode-backend-967643216830.us-central1.run.app` |
 | **API Docs (Swagger)** | `https://knapsackmode-backend-967643216830.us-central1.run.app/docs` |
-| **Frontend** | Hosted on Firebase (project: `knapsackmode-501016`) |
+| **Frontend** | https://knapsackmode-501016.web.app |
 
 ---
 
@@ -229,8 +229,8 @@ cd frontend
 # Build production bundle
 npm run build
 
-# Deploy to Firebase
-firebase deploy
+# Deploy to Firebase (no global install required)
+npx firebase-tools deploy --only hosting
 ```
 
 ---
