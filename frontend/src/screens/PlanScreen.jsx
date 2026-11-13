@@ -1,79 +1,158 @@
 import { useState } from 'react'
 import TopicEditor from '../components/TopicEditor'
 import { allocate } from '../services/api'
+import {
+  IconLayers,
+  IconSliders,
+  IconPlay,
+  IconArrowLeft,
+  IconBolt,
+  IconClock,
+  IconEye,
+  IconBook,
+  IconTarget,
+  IconAlertCircle,
+} from '../components/Icons'
 
-const DEPTH_LABELS = {
-  deep:     { label: 'Deep Dive',   cls: 'depth-deep',     icon: '🔬' },
-  standard: { label: 'Core Review', cls: 'depth-standard', icon: '📖' },
-  skim:     { label: 'Quick Pass',  cls: 'depth-skim',     icon: '👀' },
+const DEPTH_META = {
+  deep: {
+    label: 'Deep Dive',
+    cls: 'depth-deep',
+    Icon: IconTarget,
+    desc: '100% value coverage',
+  },
+  standard: {
+    label: 'Core Review',
+    cls: 'depth-standard',
+    Icon: IconBook,
+    desc: '60% value coverage',
+  },
+  skim: {
+    label: 'Quick Pass',
+    cls: 'depth-skim',
+    Icon: IconEye,
+    desc: '25% value coverage',
+  },
 }
 
-// ── Summary bar ───────────────────────────────────────────────────────────────
-function SummaryBar({ plan, timeBudget }) {
+// ── Executive Summary Metrics ─────────────────────────────────────────────────
+function SummaryDashboard({ plan, topics, timeBudget }) {
   const usedTime      = plan.reduce((s, t) => s + t.allocated_minutes, 0)
+  const rawTotalTime  = topics.reduce((s, t) => s + (t.time_needed_minutes || 0), 0)
   const pct           = Math.min(100, Math.round((usedTime / timeBudget) * 100))
-  const deepCount     = plan.filter(t => t.depth_level === 'deep').length
-  const standardCount = plan.filter(t => t.depth_level === 'standard').length
-  const skimCount     = plan.filter(t => t.depth_level === 'skim').length
+  const deepCount     = plan.filter((t) => t.depth_level === 'deep').length
+  const standardCount = plan.filter((t) => t.depth_level === 'standard').length
+  const skimCount     = plan.filter((t) => t.depth_level === 'skim').length
 
   return (
-    <div className="card gap-md" style={{ marginBottom: '1.5rem' }}>
-      <div className="row-between">
-        <h3>Sprint Plan</h3>
-        <span className="badge badge-accent">{plan.length} topics</span>
+    <div className="gap-md" style={{ marginBlockEnd: '1.5rem' }}>
+      <div className="metrics-grid" style={{ marginBlockEnd: 0 }}>
+        <div className="metric-card">
+          <div className="metric-label">
+            <span>Budget Allocated</span>
+            <IconClock />
+          </div>
+          <div className="metric-value">
+            {usedTime} <span style={{ fontSize: '0.95rem', fontWeight: 500, color: 'var(--text-muted)' }}>/ {timeBudget}m</span>
+          </div>
+          <div className="metric-sub">
+            {pct}% utilized · {Math.max(0, timeBudget - usedTime)}m buffer
+          </div>
+        </div>
+
+        <div className="metric-card">
+          <div className="metric-label">
+            <span>Topics Scheduled</span>
+            <IconLayers />
+          </div>
+          <div className="metric-value">
+            {plan.length} <span style={{ fontSize: '0.95rem', fontWeight: 500, color: 'var(--text-muted)' }}>of {topics.length}</span>
+          </div>
+          <div className="metric-sub">
+            {rawTotalTime > 0 ? `Compressed from ${rawTotalTime}m raw estimate` : 'Ranked by value density'}
+          </div>
+        </div>
+
+        <div className="metric-card">
+          <div className="metric-label">
+            <span>Deep Dives</span>
+            <IconTarget />
+          </div>
+          <div className="metric-value" style={{ color: 'var(--accent-light)' }}>
+            {deepCount}
+          </div>
+          <div className="metric-sub">
+            Full mastery allocation
+          </div>
+        </div>
+
+        <div className="metric-card">
+          <div className="metric-label">
+            <span>Review &amp; Skim</span>
+            <IconBook />
+          </div>
+          <div className="metric-value" style={{ color: 'var(--amber-light)' }}>
+            {standardCount} <span style={{ fontSize: '0.95rem', fontWeight: 500, color: 'var(--text-muted)' }}>core · {skimCount} skim</span>
+          </div>
+          <div className="metric-sub">
+            High-efficiency compression
+          </div>
+        </div>
       </div>
 
-      <div className="stat-grid">
-        <div className="stat-item">
-          <div className="stat-value" style={{ color: 'var(--amber-light)' }}>{usedTime}</div>
-          <div className="stat-label">of {timeBudget} min</div>
+      <div className="card-subtle gap-xs">
+        <div className="row-between">
+          <span className="text-sm" style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+            Time Budget Utilization ({usedTime}m / {timeBudget}m)
+          </span>
+          <span className="text-muted tabular">{pct}%</span>
         </div>
-        <div className="stat-item">
-          <div className="stat-value" style={{ color: 'var(--accent-light)' }}>{deepCount}</div>
-          <div className="stat-label">Deep Dives</div>
-        </div>
-        <div className="stat-item">
-          <div className="stat-value" style={{ color: 'var(--amber)' }}>{standardCount}</div>
-          <div className="stat-label">Core Reviews</div>
-        </div>
-        <div className="stat-item">
-          <div className="stat-value" style={{ color: 'var(--text-secondary)' }}>{skimCount}</div>
-          <div className="stat-label">Quick Passes</div>
-        </div>
-      </div>
-
-      <div>
-        <div className="progress-bar">
-          <div className="progress-fill" style={{ width: `${pct}%` }} />
-        </div>
-        <div className="row-between mt-sm">
-          <span className="text-muted">{pct}% of budget allocated</span>
-          <span className="text-muted">{timeBudget - usedTime} min buffer</span>
+        <div className="progress-track" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+          <div className="progress-fill" style={{ inlineSize: `${pct}%` }} />
         </div>
       </div>
     </div>
   )
 }
 
-// ── Read-only plan topic card ─────────────────────────────────────────────────
+// ── Read-only Plan Topic Card ─────────────────────────────────────────────────
 function PlanTopicCard({ topic, idx }) {
-  const depth = DEPTH_LABELS[topic.depth_level] || DEPTH_LABELS.standard
-  const importanceColor = topic.importance >= 8 ? '#ef4444' : topic.importance >= 5 ? '#f59e0b' : '#94a3b8'
+  const depth = DEPTH_META[topic.depth_level] || DEPTH_META.standard
+  const DepthIcon = depth.Icon
+  const impBadge =
+    topic.importance >= 8
+      ? 'badge-red'
+      : topic.importance >= 5
+      ? 'badge-amber'
+      : 'badge-ghost'
 
   return (
     <div className="topic-card">
-      <div className="topic-card-rank">#{idx + 1}</div>
-      <div className="topic-card-body">
-        <div className="topic-card-title">{topic.topic}</div>
-        <div className="topic-card-meta">
-          <span className={`badge ${depth.cls}`}>{depth.icon} {depth.label}</span>
-          <span className="badge" style={{ background: `${importanceColor}1a`, color: importanceColor, borderColor: `${importanceColor}4d`, fontSize: '0.7rem' }}>
-            ★ {topic.importance}
-          </span>
-          <span className="badge badge-ghost" style={{ fontSize: '0.7rem' }}>⚡ {topic.difficulty}</span>
+      <div className="row" style={{ flex: '1 1 18rem', minInlineSize: 0 }}>
+        <div className="topic-card-rank">{String(idx + 1).padStart(2, '0')}</div>
+        <div className="topic-card-body">
+          <div className="topic-card-title">{topic.topic}</div>
+          <div className="topic-card-meta">
+            <span className={`badge ${depth.cls}`}>
+              <DepthIcon />
+              <span>{depth.label}</span>
+            </span>
+            <span className={`badge ${impBadge} tabular`}>
+              Importance {topic.importance}/10
+            </span>
+            <span className="badge badge-ghost tabular">
+              Difficulty {topic.difficulty}/10
+            </span>
+          </div>
         </div>
       </div>
-      <div className="topic-card-time">{topic.allocated_minutes}m</div>
+
+      <div className="topic-card-time">
+        <span>{topic.allocated_minutes} min</span>
+        <span className="text-muted" style={{ fontSize: '0.7rem', fontFamily: 'var(--font-sans)', fontWeight: 500 }}>
+          allocated
+        </span>
+      </div>
     </div>
   )
 }
@@ -83,8 +162,8 @@ export default function PlanScreen({
   topics, setTopics, plan, timeBudget, contextType,
   onPlanUpdated, onStartSprint, onBack,
 }) {
-  // 'edit' = topic editor shown first, 'plan' = read-only optimized plan
-  const [subView, setSubView] = useState('edit')
+  // Default to 'plan' so the user immediately sees the optimized schedule
+  const [subView, setSubView] = useState('plan')
   const [recalcLoading, setRecalcLoading] = useState(false)
   const [recalcError, setRecalcError] = useState(null)
 
@@ -103,104 +182,166 @@ export default function PlanScreen({
     }
   }
 
-  const contextLabel = contextType === 'interview' ? '💼 Interview Prep' : '📚 Exam Prep'
+  // Topics omitted by knapsack due to tight budget
+  const scheduledNames = new Set(plan.map((p) => p.topic))
+  const omittedTopics = topics.filter((t) => !scheduledNames.has(t.topic))
 
   return (
-    <div className="page">
-      {/* Header */}
-      <div className="row-between" style={{ marginBottom: '1.25rem' }}>
-        <div>
-          <div className="row" style={{ gap: '0.5rem', marginBottom: '0.2rem' }}>
-            <span style={{ fontSize: '1.4rem' }}>🎯</span>
-            <h2>{subView === 'edit' ? 'Review & Edit Topics' : 'Your Optimized Sprint Plan'}</h2>
+    <div className="workspace-narrow">
+      {/* ── Page Header ── */}
+      <div className="row-between" style={{ marginBlockEnd: '1.5rem' }}>
+        <div className="gap-xs">
+          <div className="eyebrow-badge">
+            <IconLayers />
+            <span>0/1 Knapsack Optimization Result</span>
           </div>
-          <div className="row" style={{ gap: '0.5rem' }}>
-            <p className="text-muted text-sm">
-              {subView === 'edit'
-                ? 'Remove topics you already know, adjust scores, then recalculate.'
-                : 'Knapsack-optimized — not an even split.'}
-            </p>
-            <span className="badge badge-ghost" style={{ fontSize: '0.7rem' }}>{contextLabel}</span>
-          </div>
+          <h1>
+            {subView === 'plan' ? 'Your Optimized Study Plan' : 'Customize Topic Weights'}
+          </h1>
+          <p className="text-muted">
+            {subView === 'plan'
+              ? 'Ordered by value-per-minute efficiency to maximize exam & interview recall within your time cap.'
+              : 'Remove topics you already know or adjust importance scores, then re-run the solver.'}
+          </p>
         </div>
-        <div className="row" style={{ gap: '0.5rem' }}>
-          {subView === 'plan' && (
-            <button className="btn btn-ghost btn-sm" onClick={() => setSubView('edit')}>
-              ✏️ Edit Topics
+
+        <div className="row">
+          <div className="segmented-tabs" role="tablist" aria-label="Plan view mode">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={subView === 'plan'}
+              className={`seg-tab ${subView === 'plan' ? 'active' : ''}`}
+              onClick={() => setSubView('plan')}
+            >
+              <IconLayers />
+              <span>Sprint Plan ({plan.length})</span>
             </button>
-          )}
-          <button className="btn btn-ghost btn-sm" onClick={onBack} id="back-to-input">
-            ← Material
+            <button
+              type="button"
+              role="tab"
+              aria-selected={subView === 'edit'}
+              className={`seg-tab ${subView === 'edit' ? 'active' : ''}`}
+              onClick={() => setSubView('edit')}
+            >
+              <IconSliders />
+              <span>Edit Topics ({topics.length})</span>
+            </button>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={onBack}
+            id="back-to-input"
+          >
+            <IconArrowLeft />
+            <span>Change Material</span>
           </button>
         </div>
       </div>
 
-      {/* ── EDIT sub-view ── */}
+      {/* ── EDIT SUB-VIEW ── */}
       {subView === 'edit' && (
-        <>
+        <div className="gap-lg">
           <TopicEditor topics={topics} onTopicsChange={setTopics} />
 
           {recalcError && (
-            <div className="toast-error" style={{ borderRadius: 'var(--radius-md)', padding: '0.75rem', position: 'static', marginTop: '1rem' }}>
-              ⚠️ {recalcError}
+            <div className="alert-banner alert-error" role="alert">
+              <IconAlertCircle />
+              <span>{recalcError}</span>
             </div>
           )}
 
-          <div className="row" style={{ gap: '0.75rem', marginTop: '1.25rem' }}>
+          <div className="row-between">
             <button
-              id="recalculate-btn"
-              className="btn btn-primary"
-              onClick={handleRecalculate}
-              disabled={recalcLoading || topics.length === 0}
-              style={{ flex: 1, justifyContent: 'center' }}
-            >
-              {recalcLoading ? (
-                <><span className="loading-spinner" /> Recalculating…</>
-              ) : '⚡ Calculate Sprint Plan'}
-            </button>
-            <button
-              className="btn btn-ghost btn-sm"
+              type="button"
+              className="btn btn-ghost"
               onClick={() => setSubView('plan')}
               disabled={plan.length === 0}
             >
-              View Plan →
+              Cancel
+            </button>
+            <button
+              type="button"
+              id="recalculate-btn"
+              className="btn btn-primary btn-lg"
+              onClick={handleRecalculate}
+              disabled={recalcLoading || topics.length === 0}
+            >
+              {recalcLoading ? (
+                <>
+                  <span className="loading-spinner" />
+                  <span>Re-optimizing Knapsack Plan…</span>
+                </>
+              ) : (
+                <>
+                  <IconBolt />
+                  <span>Recalculate Optimal Plan</span>
+                </>
+              )}
             </button>
           </div>
-        </>
+        </div>
       )}
 
-      {/* ── PLAN sub-view ── */}
+      {/* ── PLAN SUB-VIEW ── */}
       {subView === 'plan' && (
-        <>
-          <SummaryBar plan={plan} timeBudget={timeBudget} />
+        <div className="gap-lg">
+          <SummaryDashboard plan={plan} topics={topics} timeBudget={timeBudget} />
 
-          {/* Algorithmic note */}
-          <div className="card-glass" style={{ marginBottom: '1.5rem', padding: '0.875rem 1.25rem' }}>
-            <p className="text-sm" style={{ color: 'var(--accent-light)' }}>
-              <strong>How this was optimized:</strong>{' '}
-              <span style={{ color: 'var(--text-secondary)' }}>
-                Each topic was expanded into 3 depth levels (skim/standard/deep).
-                A 0/1 DP knapsack selected the combination maximizing importance coverage within {timeBudget} min.
-              </span>
-            </p>
+          {/* Primary Launch Bar */}
+          <div className="card-glass row-between">
+            <div className="gap-xs">
+              <h3 style={{ color: 'var(--text-primary)' }}>Ready to start your timed sprint?</h3>
+              <p className="text-muted">
+                AI study cards and practice quizzes will be generated on-demand for each topic’s allocated depth.
+              </p>
+            </div>
+            <div className="row">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setSubView('edit')}
+              >
+                <IconSliders />
+                <span>Tune Weights</span>
+              </button>
+              <button
+                type="button"
+                id="start-sprint-btn"
+                className="btn btn-primary btn-lg"
+                onClick={onStartSprint}
+              >
+                <IconPlay />
+                <span>Start Focus Sprint</span>
+              </button>
+            </div>
           </div>
 
-          {/* Topic list */}
-          <div className="gap-sm stagger-children" style={{ marginBottom: '2rem' }}>
+          {/* Ordered Topic Queue */}
+          <div className="gap-sm stagger-children">
             {plan.map((topic, idx) => (
               <PlanTopicCard key={topic.topic} topic={topic} idx={idx} />
             ))}
           </div>
 
-          <button
-            id="start-sprint-btn"
-            className="btn btn-primary btn-lg"
-            onClick={onStartSprint}
-            style={{ width: '100%', justifyContent: 'center' }}
-          >
-            🚀 Start Sprint
-          </button>
-        </>
+          {/* Omitted topics notice (if budget forced trade-offs) */}
+          {omittedTopics.length > 0 && (
+            <div className="card-subtle gap-xs">
+              <span className="text-sm" style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>
+                Deprioritized due to {timeBudget}m budget constraint ({omittedTopics.length}):
+              </span>
+              <div className="row">
+                {omittedTopics.map((t) => (
+                  <span key={t.topic} className="badge badge-ghost">
+                    {t.topic} (★{t.importance}/10 · {t.time_needed_minutes}m)
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </div>
   )

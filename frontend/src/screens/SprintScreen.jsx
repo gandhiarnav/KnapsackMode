@@ -1,19 +1,38 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { allocate, getStudyCard, getQuiz } from '../services/api'
+import {
+  IconCheck,
+  IconCheckCircle,
+  IconClock,
+  IconSkipForward,
+  IconPlay,
+  IconPause,
+  IconBook,
+  IconHelpCircle,
+  IconLightbulb,
+  IconAward,
+  IconCopy,
+  IconRotateCcw,
+  IconTarget,
+  IconEye,
+  IconAlertCircle,
+  IconLayers,
+  IconArrowLeft,
+} from '../components/Icons'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const DEPTH_LABELS = {
-  deep:     { label: 'Deep Dive',   icon: '🔬' },
-  standard: { label: 'Core Review', icon: '📖' },
-  skim:     { label: 'Quick Pass',  icon: '👀' },
+  deep:     { label: 'Deep Dive',   cls: 'depth-deep',     Icon: IconTarget },
+  standard: { label: 'Core Review', cls: 'depth-standard', Icon: IconBook },
+  skim:     { label: 'Quick Pass',  cls: 'depth-skim',     Icon: IconEye },
 }
 const EXTEND_MINUTES = 5
 
 // ── Countdown Ring ────────────────────────────────────────────────────────────
-function CountdownRing({ totalSeconds, remainingSeconds }) {
-  const SIZE = 160
-  const STROKE = 10
+function CountdownRing({ totalSeconds, remainingSeconds, paused, onTogglePause }) {
+  const SIZE = 148
+  const STROKE = 8
   const R = (SIZE - STROKE) / 2
   const CIRC = 2 * Math.PI * R
   const progress = totalSeconds > 0 ? remainingSeconds / totalSeconds : 0
@@ -24,25 +43,52 @@ function CountdownRing({ totalSeconds, remainingSeconds }) {
   const urgency = progress < 0.25 ? 'urgent' : progress < 0.5 ? 'warning' : ''
 
   return (
-    <div className={`countdown-ring ${urgency}`} style={{ width: SIZE, height: SIZE }}>
-      <svg width={SIZE} height={SIZE}>
-        <circle className="ring-bg" cx={SIZE / 2} cy={SIZE / 2} r={R} strokeWidth={STROKE} />
-        <circle
-          className="ring-fill"
-          cx={SIZE / 2} cy={SIZE / 2} r={R}
-          strokeWidth={STROKE}
-          strokeDasharray={CIRC}
-          strokeDashoffset={offset}
-        />
-      </svg>
-      <div className="ring-text" style={{ fontSize: '1.5rem', lineHeight: 1 }}>
-        <div style={{ color: urgency === 'urgent' ? 'var(--red)' : urgency === 'warning' ? 'var(--amber)' : 'var(--accent-light)' }}>
-          {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
-        </div>
-        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          remaining
+    <div className="gap-xs" style={{ alignItems: 'center' }}>
+      <div className={`countdown-ring ${urgency}`} style={{ inlineSize: SIZE, blockSize: SIZE }}>
+        <svg width={SIZE} height={SIZE} aria-hidden="true">
+          <circle className="ring-bg" cx={SIZE / 2} cy={SIZE / 2} r={R} strokeWidth={STROKE} />
+          <circle
+            className="ring-fill"
+            cx={SIZE / 2}
+            cy={SIZE / 2}
+            r={R}
+            strokeWidth={STROKE}
+            strokeDasharray={CIRC}
+            strokeDashoffset={offset}
+          />
+        </svg>
+        <div className="ring-text">
+          <div
+            className="mono tabular"
+            style={{
+              fontSize: '1.5rem',
+              fontWeight: 700,
+              lineHeight: 1.1,
+              color:
+                urgency === 'urgent'
+                  ? 'var(--rose-light)'
+                  : urgency === 'warning'
+                  ? 'var(--amber-light)'
+                  : 'var(--text-primary)',
+            }}
+          >
+            {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+          </div>
+          <div className="text-muted" style={{ fontSize: '0.7rem', marginTop: '0.15rem' }}>
+            {paused ? 'Paused' : 'Remaining'}
+          </div>
         </div>
       </div>
+
+      <button
+        type="button"
+        className="btn btn-ghost btn-sm"
+        onClick={onTogglePause}
+        style={{ fontSize: '0.75rem', padding: '0.25rem 0.65rem' }}
+      >
+        {paused ? <IconPlay /> : <IconPause />}
+        <span>{paused ? 'Resume' : 'Pause'}</span>
+      </button>
     </div>
   )
 }
@@ -51,9 +97,13 @@ function CountdownRing({ totalSeconds, remainingSeconds }) {
 function StudyCard({ content, loading }) {
   if (loading) {
     return (
-      <div className="gap-sm">
-        {[1, 2, 3, 4].map(i => (
-          <div key={i} className="skeleton" style={{ height: 40, animationDelay: `${i * 0.1}s` }} />
+      <div className="gap-sm" aria-busy="true" aria-label="Generating study card">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div
+            key={i}
+            className="skeleton"
+            style={{ minBlockSize: '3.25rem', animationDelay: `${i * 0.08}s` }}
+          />
         ))}
       </div>
     )
@@ -63,35 +113,29 @@ function StudyCard({ content, loading }) {
     <div className="study-card-content">
       <ReactMarkdown
         components={{
-          // Render unordered lists with our card styling
           ul: ({ children }) => <ul>{children}</ul>,
-          ol: ({ children }) => <ol style={{ paddingLeft: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>{children}</ol>,
+          ol: ({ children }) => (
+            <ol style={{ paddingInlineStart: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              {children}
+            </ol>
+          ),
           li: ({ children }) => <li>{children}</li>,
-          // Bold → accent colour
-          strong: ({ children }) => (
-            <strong style={{ color: 'var(--accent-light)', fontWeight: 700 }}>{children}</strong>
-          ),
-          // Inline code → monospace pill
-          code: ({ children }) => (
-            <code style={{
-              background: 'rgba(99,102,241,0.15)',
-              color: 'var(--accent-light)',
-              padding: '0.1em 0.4em',
-              borderRadius: '4px',
-              fontFamily: 'JetBrains Mono, monospace',
-              fontSize: '0.85em',
-            }}>{children}</code>
-          ),
-          // Paragraphs as normal text
+          strong: ({ children }) => <strong>{children}</strong>,
+          code: ({ children }) => <code>{children}</code>,
           p: ({ children }) => (
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '0.5rem', lineHeight: 1.7 }}>{children}</p>
+            <p style={{ color: 'var(--text-secondary)', marginBlockEnd: '0.5rem', lineHeight: 1.65 }}>
+              {children}
+            </p>
           ),
-          // H3 headers (Gemini sometimes uses these for sections)
           h3: ({ children }) => (
-            <h3 style={{ color: 'var(--text-primary)', fontSize: '0.95rem', fontWeight: 700, margin: '0.75rem 0 0.35rem' }}>{children}</h3>
+            <h3 style={{ color: 'var(--text-primary)', fontSize: '0.95rem', marginBlock: '0.75rem 0.35rem' }}>
+              {children}
+            </h3>
           ),
           h2: ({ children }) => (
-            <h3 style={{ color: 'var(--text-primary)', fontSize: '1rem', fontWeight: 700, margin: '0.75rem 0 0.35rem' }}>{children}</h3>
+            <h3 style={{ color: 'var(--text-primary)', fontSize: '1rem', marginBlock: '0.75rem 0.35rem' }}>
+              {children}
+            </h3>
           ),
         }}
       >
@@ -101,24 +145,40 @@ function StudyCard({ content, loading }) {
   )
 }
 
-// ── Sidebar: Live remaining plan ──────────────────────────────────────────────
-function PlanSidebar({ plan, currentIdx, completedTopics }) {
+// ── Sidebar: Live Remaining Plan ──────────────────────────────────────────────
+function PlanSidebar({ plan, completedTopics, reallocatedCount }) {
   const timeLeft = plan.reduce((s, t) => s + t.allocated_minutes, 0)
 
   return (
-    <div className="plan-sidebar">
+    <aside className="plan-sidebar" aria-label="Sprint queue">
       <div className="card gap-md">
         <div className="row-between">
-          <h3 style={{ fontSize: '0.9rem' }}>Remaining Plan</h3>
-          <span className="badge badge-amber">{timeLeft}m left</span>
+          <div className="row">
+            <IconLayers />
+            <h3 style={{ fontSize: '0.925rem' }}>Sprint Queue</h3>
+          </div>
+          <span className="badge badge-amber tabular">
+            <IconClock />
+            <span>{timeLeft}m left</span>
+          </span>
         </div>
+
+        {reallocatedCount > 0 && (
+          <div className="badge badge-accent" style={{ alignSelf: 'flex-start' }}>
+            <span>DP Re-optimized ({reallocatedCount}x)</span>
+          </div>
+        )}
+
         <div className="plan-sidebar-list">
           {plan.map((topic, i) => {
             const depthInfo = DEPTH_LABELS[topic.depth_level] || DEPTH_LABELS.standard
+            const DepthIcon = depthInfo.Icon
             const isCurrent = i === 0
             return (
               <div key={topic.topic} className={`sidebar-topic ${isCurrent ? 'current-topic' : ''}`}>
-                <span style={{ fontSize: '0.85rem' }}>{depthInfo.icon}</span>
+                <span style={{ color: isCurrent ? 'var(--accent-light)' : 'var(--text-muted)', display: 'inline-flex' }}>
+                  <DepthIcon />
+                </span>
                 <span className="sidebar-topic-name">{topic.topic}</span>
                 <span className="sidebar-topic-time">{topic.allocated_minutes}m</span>
               </div>
@@ -126,115 +186,106 @@ function PlanSidebar({ plan, currentIdx, completedTopics }) {
           })}
           {plan.length === 0 && (
             <p className="text-muted text-sm" style={{ textAlign: 'center', padding: '1rem' }}>
-              All topics complete!
+              All scheduled topics complete!
             </p>
           )}
         </div>
 
         {completedTopics.length > 0 && (
-          <div style={{ marginTop: '0.5rem' }}>
-            <p className="text-muted" style={{ fontSize: '0.75rem', marginBottom: '0.5rem' }}>
-              ✅ Completed ({completedTopics.length})
-            </p>
-            {completedTopics.map(t => (
-              <div key={t.topic} style={{ fontSize: '0.78rem', color: 'var(--text-muted)', padding: '0.2rem 0' }}>
-                {t.topic}
+          <div className="gap-xs" style={{ paddingBlockStart: '0.75rem', borderBlockStart: '1px solid var(--border-subtle)' }}>
+            <span className="text-muted" style={{ fontWeight: 600 }}>
+              Completed ({completedTopics.length})
+            </span>
+            {completedTopics.map((t) => (
+              <div key={t.topic} className="row" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                <span style={{ color: 'var(--emerald-light)', display: 'inline-flex' }}>
+                  <IconCheck />
+                </span>
+                <span>{t.topic}</span>
               </div>
             ))}
           </div>
         )}
       </div>
-    </div>
+    </aside>
   )
 }
 
-// ── Quiz Tab: Question Cards with Reveal ──────────────────────────────────
+// ── Quiz Tab: Question Cards with Reveal ──────────────────────────────────────
 function QuizCard({ q, index }) {
   const [revealed, setRevealed] = useState(false)
   const [hintShown, setHintShown] = useState(false)
 
   return (
-    <div
-      style={{
-        background: revealed ? 'rgba(16,185,129,0.06)' : 'var(--bg-card)',
-        border: `1px solid ${revealed ? 'rgba(16,185,129,0.3)' : 'var(--border)'}`,
-        borderRadius: 'var(--radius-md)',
-        padding: '1rem 1.25rem',
-        transition: 'all 0.3s ease',
-        animation: `slideIn 0.3s ease ${index * 0.06}s both`,
-      }}
-    >
-      {/* Question number + text */}
-      <div className="row" style={{ alignItems: 'flex-start', gap: '0.75rem', marginBottom: '0.75rem' }}>
-        <span style={{
-          minWidth: 26, height: 26,
-          background: revealed ? 'var(--green)' : 'var(--accent)',
-          borderRadius: '50%',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '0.75rem', fontWeight: 800, color: 'white', flexShrink: 0,
-          transition: 'background 0.3s',
-        }}>
-          {revealed ? '✓' : index + 1}
+    <div className={`quiz-card ${revealed ? 'revealed' : ''} gap-sm`}>
+      <div className="row" style={{ alignItems: 'flex-start', flexWrap: 'nowrap' }}>
+        <span className="quiz-num">
+          {revealed ? <IconCheck /> : String(index + 1).padStart(2, '0')}
         </span>
-        <p style={{ color: 'var(--text-primary)', fontSize: '0.95rem', lineHeight: 1.6, margin: 0, fontWeight: 500 }}>
+        <p style={{ color: 'var(--text-primary)', fontSize: '0.95rem', lineHeight: 1.55, fontWeight: 500 }}>
           {q.question}
         </p>
       </div>
 
-      {/* Hint */}
       {!revealed && (
-        <div style={{ marginLeft: '2.1rem', marginBottom: '0.75rem' }}>
+        <div style={{ paddingInlineStart: '2.25rem' }} className="gap-sm">
           {!hintShown ? (
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => setHintShown(true)}
-              style={{ fontSize: '0.78rem', padding: '0.3rem 0.75rem' }}
-            >
-              💡 Show Hint
-            </button>
-          ) : (
-            <div style={{
-              background: 'rgba(245,158,11,0.08)',
-              border: '1px solid rgba(245,158,11,0.25)',
-              borderRadius: 'var(--radius-sm)',
-              padding: '0.5rem 0.75rem',
-              fontSize: '0.84rem',
-              color: 'var(--amber-light)',
-              fontStyle: 'italic',
-            }}>
-              💡 {q.hint}
+            <div className="row">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setHintShown(true)}
+              >
+                <IconLightbulb />
+                <span>Show Hint</span>
+              </button>
+              <button
+                type="button"
+                id={`reveal-${index}`}
+                className="btn btn-emerald btn-sm"
+                onClick={() => setRevealed(true)}
+              >
+                <IconCheck />
+                <span>Reveal Answer</span>
+              </button>
             </div>
+          ) : (
+            <>
+              <div className="card-subtle" style={{ borderColor: 'var(--amber-border)', background: 'var(--amber-subtle)' }}>
+                <p style={{ color: 'var(--amber-light)', fontSize: '0.85rem' }}>
+                  <strong>Hint:</strong> {q.hint}
+                </p>
+              </div>
+              <div>
+                <button
+                  type="button"
+                  id={`reveal-${index}`}
+                  className="btn btn-emerald btn-sm"
+                  onClick={() => setRevealed(true)}
+                >
+                  <IconCheck />
+                  <span>Reveal Answer</span>
+                </button>
+              </div>
+            </>
           )}
         </div>
       )}
 
-      {/* Answer (revealed) */}
-      {revealed ? (
+      {revealed && (
         <div
           style={{
-            marginLeft: '2.1rem',
-            background: 'rgba(16,185,129,0.08)',
-            border: '1px solid rgba(16,185,129,0.25)',
+            marginInlineStart: '2.25rem',
+            padding: '0.75rem 1rem',
+            background: 'rgba(16, 185, 129, 0.08)',
+            border: '1px solid var(--emerald-border)',
             borderRadius: 'var(--radius-sm)',
-            padding: '0.65rem 0.9rem',
-            fontSize: '0.88rem',
-            color: 'var(--text-primary)',
-            lineHeight: 1.65,
-            animation: 'fadeIn 0.25s ease',
           }}
         >
-          <span style={{ color: 'var(--green)', fontWeight: 700, marginRight: '0.4rem' }}>Answer:</span>
-          {q.answer}
-        </div>
-      ) : (
-        <div style={{ marginLeft: '2.1rem' }}>
-          <button
-            id={`reveal-${index}`}
-            className="btn btn-green btn-sm"
-            onClick={() => setRevealed(true)}
-          >
-            Reveal Answer
-          </button>
+          <p style={{ color: 'var(--text-primary)', fontSize: '0.88rem', lineHeight: 1.65 }}>
+            <strong style={{ color: 'var(--emerald-light)', marginInlineEnd: '0.4rem' }}>Answer:</strong>
+            {q.answer}
+          </p>
         </div>
       )}
     </div>
@@ -251,19 +302,19 @@ function QuizTab({ topic, depthLevel, importance, contextType = 'exam' }) {
     setLoading(true)
     setError(null)
     getQuiz(topic, depthLevel, importance, contextType)
-      .then(qs => { setQuestions(qs); setLoading(false) })
-      .catch(err => { setError(err.message); setLoading(false) })
-  }, [topic, depthLevel, contextType])
+      .then((qs) => { setQuestions(qs); setLoading(false) })
+      .catch((err) => { setError(err.message); setLoading(false) })
+  }, [topic, depthLevel, importance, contextType])
 
   if (loading) {
     return (
       <div className="gap-sm">
-        <p className="text-muted text-sm" style={{ marginBottom: '0.5rem' }}>
-          <span className="loading-spinner" style={{ marginRight: '0.5rem' }} />
-          Generating practice questions…
-        </p>
-        {[1, 2, 3].map(i => (
-          <div key={i} className="skeleton" style={{ height: 80, animationDelay: `${i * 0.1}s`, borderRadius: 'var(--radius-md)' }} />
+        <div className="row text-muted">
+          <span className="loading-spinner" />
+          <span>Generating practice questions for {topic}…</span>
+        </div>
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="skeleton" style={{ minBlockSize: '5rem' }} />
         ))}
       </div>
     )
@@ -271,16 +322,17 @@ function QuizTab({ topic, depthLevel, importance, contextType = 'exam' }) {
 
   if (error) {
     return (
-      <div className="toast-error" style={{ borderRadius: 'var(--radius-md)', padding: '0.75rem', position: 'static' }}>
-        ⚠️ {error}
+      <div className="alert-banner alert-error" role="alert">
+        <IconAlertCircle />
+        <span>{error}</span>
       </div>
     )
   }
 
   return (
     <div className="gap-sm">
-      <p className="text-muted text-sm" style={{ marginBottom: '0.25rem' }}>
-        Try answering before revealing. {questions.length} questions, progressively harder.
+      <p className="text-muted">
+        Formulate your response before revealing the answer. {questions.length} progressive questions generated.
       </p>
       {questions.map((q, i) => (
         <QuizCard key={i} q={q} index={i} />
@@ -289,30 +341,30 @@ function QuizTab({ topic, depthLevel, importance, contextType = 'exam' }) {
   )
 }
 
-// ── Confetti ──────────────────────────────────────────────────────────────
+// ── Confetti (Motion-safe via CSS) ────────────────────────────────────────────
 function Confetti() {
   const COLORS = ['#6366f1', '#f59e0b', '#10b981', '#a78bfa', '#fcd34d', '#34d399']
-  const pieces = Array.from({ length: 60 }, (_, i) => ({
+  const pieces = Array.from({ length: 48 }, (_, i) => ({
     id: i,
-    left: `${Math.random() * 100}%`,
-    color: COLORS[Math.floor(Math.random() * COLORS.length)],
-    duration: `${2 + Math.random() * 2}s`,
-    delay: `${Math.random() * 1.5}s`,
-    size: `${6 + Math.random() * 8}px`,
+    left: `${(i * 2.1) % 100}%`,
+    color: COLORS[i % COLORS.length],
+    duration: `${2.2 + (i % 5) * 0.4}s`,
+    delay: `${(i % 7) * 0.15}s`,
+    size: `${6 + (i % 4) * 2}px`,
   }))
 
   return (
-    <div className="confetti-container">
-      {pieces.map(p => (
+    <div className="confetti-container" aria-hidden="true">
+      {pieces.map((p) => (
         <div
           key={p.id}
           className="confetti-piece"
           style={{
-            left: p.left,
-            top: '-20px',
+            insetInlineStart: p.left,
+            insetBlockStart: '-20px',
             background: p.color,
-            width: p.size,
-            height: p.size,
+            inlineSize: p.size,
+            blockSize: p.size,
             animationDuration: p.duration,
             animationDelay: p.delay,
           }}
@@ -322,119 +374,164 @@ function Confetti() {
   )
 }
 
-// ── Completion Screen (v2 — Analytics Dashboard) ───────────────────────────
+// ── Completion Screen (Analytics Dashboard) ───────────────────────────────────
 function CompletionScreen({ completed, skipped, analytics, totalBudget, onRestart }) {
-  // Compute efficiency: importance points covered vs total
+  const [copied, setCopied] = useState(false)
+
   const allTopics = [...completed, ...skipped]
   const totalImportance = allTopics.reduce((s, t) => s + (t.importance || 0), 0)
   const coveredImportance = completed.reduce((s, t) => s + (t.importance || 0), 0)
   const efficiencyPct = totalImportance > 0 ? Math.round((coveredImportance / totalImportance) * 100) : 0
 
-  // Topics that need review (skipped or took longer than allocated)
   const reviewList = [
-    ...skipped.map(t => t.topic),
-    ...analytics.filter(a => a.outcome === 'got_it' && a.timeSpent > a.allocated + 2).map(a => a.topic),
+    ...skipped.map((t) => t.topic),
+    ...analytics
+      .filter((a) => a.outcome === 'got_it' && a.timeSpent > a.allocated + 2)
+      .map((a) => a.topic),
   ]
 
-  const outcomeIcon = { got_it: '✅', skipped: '⏭', extended: '⏱' }
+  const handleCopyReview = () => {
+    navigator.clipboard?.writeText(reviewList.join('\n'))
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   return (
     <>
       <Confetti />
-      <div className="page" style={{ paddingTop: '2.5rem' }}>
-        <div style={{ maxWidth: 620, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-
-          {/* Hero */}
-          <div className="card" style={{ textAlign: 'center', padding: '2rem 1.5rem' }}>
-            <div style={{ fontSize: '3.5rem', marginBottom: '0.5rem' }}>🎉</div>
-            <h2 style={{ marginBottom: '0.25rem' }}>Sprint Complete!</h2>
-            <p className="text-muted">Here's how you did.</p>
+      <div className="workspace-narrow">
+        <div className="gap-lg" style={{ maxInlineSize: '44rem', marginInline: 'auto' }}>
+          {/* Hero Summary */}
+          <div className="card gap-sm" style={{ textAlign: 'center', alignItems: 'center', padding: '2.25rem 1.5rem' }}>
+            <span
+              className="panel-icon"
+              style={{
+                inlineSize: '3rem',
+                blockSize: '3rem',
+                fontSize: '1.5rem',
+                background: 'var(--emerald-subtle)',
+                borderColor: 'var(--emerald-border)',
+                color: 'var(--emerald-light)',
+              }}
+            >
+              <IconAward />
+            </span>
+            <h1>Sprint Complete</h1>
+            <p className="text-muted">
+              You captured <strong>{efficiencyPct}%</strong> of the total exam/interview importance score within your {totalBudget}-minute budget.
+            </p>
           </div>
 
-          {/* Key stats */}
-          <div className="card">
-            <div className="stat-grid">
-              <div className="stat-item">
-                <div className="stat-value" style={{ color: 'var(--green)' }}>{efficiencyPct}%</div>
-                <div className="stat-label">Importance covered</div>
+          {/* KPI Grid */}
+          <div className="metrics-grid" style={{ marginBlockEnd: 0 }}>
+            <div className="metric-card">
+              <div className="metric-label">
+                <span>Importance Captured</span>
+                <IconTarget />
               </div>
-              <div className="stat-item">
-                <div className="stat-value" style={{ color: 'var(--accent-light)' }}>{completed.length}</div>
-                <div className="stat-label">Topics done</div>
+              <div className="metric-value" style={{ color: 'var(--emerald-light)' }}>
+                {efficiencyPct}%
               </div>
-              <div className="stat-item">
-                <div className="stat-value" style={{ color: 'var(--text-muted)' }}>{skipped.length}</div>
-                <div className="stat-label">Skipped</div>
+              <div className="metric-sub">Weighted value coverage</div>
+            </div>
+
+            <div className="metric-card">
+              <div className="metric-label">
+                <span>Topics Completed</span>
+                <IconCheckCircle />
               </div>
-              <div className="stat-item">
-                <div className="stat-value" style={{ color: 'var(--amber-light)' }}>{totalBudget}</div>
-                <div className="stat-label">Min budget</div>
+              <div className="metric-value" style={{ color: 'var(--accent-light)' }}>
+                {completed.length}
               </div>
+              <div className="metric-sub">Mastered in sprint</div>
+            </div>
+
+            <div className="metric-card">
+              <div className="metric-label">
+                <span>Skipped</span>
+                <IconSkipForward />
+              </div>
+              <div className="metric-value" style={{ color: 'var(--text-muted)' }}>
+                {skipped.length}
+              </div>
+              <div className="metric-sub">Reallocated dynamically</div>
+            </div>
+
+            <div className="metric-card">
+              <div className="metric-label">
+                <span>Time Budget</span>
+                <IconClock />
+              </div>
+              <div className="metric-value" style={{ color: 'var(--amber-light)' }}>
+                {totalBudget}m
+              </div>
+              <div className="metric-sub">Sprint constraint</div>
             </div>
           </div>
 
-          {/* Per-topic outcome table */}
+          {/* Per-topic outcome list */}
           {analytics.length > 0 && (
             <div className="card gap-sm">
-              <h3 style={{ marginBottom: '0.5rem' }}>Topic Breakdown</h3>
+              <div className="panel-header" style={{ marginBlockEnd: '0.25rem' }}>
+                <h3>Session Breakdown</h3>
+                <span className="badge badge-ghost">{analytics.length} topics logged</span>
+              </div>
+
               {analytics.map((a, i) => (
-                <div key={i} style={{
-                  display: 'flex', alignItems: 'center', gap: '0.75rem',
-                  padding: '0.5rem 0.75rem',
-                  background: a.outcome === 'got_it' ? 'rgba(16,185,129,0.06)' : 'rgba(239,68,68,0.04)',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: '0.88rem',
-                }}>
-                  <span style={{ fontSize: '1rem' }}>{outcomeIcon[a.outcome] || '✅'}</span>
-                  <span style={{ flex: 1, color: 'var(--text-primary)', fontWeight: 500 }}>{a.topic}</span>
-                  <span className="badge badge-ghost" style={{ fontSize: '0.7rem' }}>★{a.importance}</span>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
-                    {a.timeSpent}m / {a.allocated}m
+                <div
+                  key={i}
+                  className="sidebar-topic"
+                  style={{
+                    borderColor: a.outcome === 'got_it' ? 'var(--emerald-border)' : 'var(--border-subtle)',
+                    background: a.outcome === 'got_it' ? 'rgba(16, 185, 129, 0.05)' : 'var(--bg-elevated)',
+                  }}
+                >
+                  <span style={{ color: a.outcome === 'got_it' ? 'var(--emerald-light)' : 'var(--text-muted)', display: 'inline-flex' }}>
+                    {a.outcome === 'got_it' ? <IconCheckCircle /> : <IconSkipForward />}
                   </span>
-                </div>
-              ))}
-              {skipped.map((t, i) => (
-                <div key={`skip-${i}`} style={{
-                  display: 'flex', alignItems: 'center', gap: '0.75rem',
-                  padding: '0.5rem 0.75rem',
-                  background: 'rgba(148,163,184,0.06)',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: '0.88rem',
-                }}>
-                  <span>⏭</span>
-                  <span style={{ flex: 1, color: 'var(--text-muted)' }}>{t.topic}</span>
-                  <span className="badge badge-ghost" style={{ fontSize: '0.7rem' }}>★{t.importance}</span>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>skipped</span>
+                  <span className="sidebar-topic-name">{a.topic}</span>
+                  <span className="badge badge-ghost tabular">★ {a.importance}/10</span>
+                  <span className="sidebar-topic-time">
+                    {a.outcome === 'skipped' ? 'Skipped' : `${a.timeSpent}m / ${a.allocated}m`}
+                  </span>
                 </div>
               ))}
             </div>
           )}
 
-          {/* Review list */}
+          {/* Follow-up Review List */}
           {reviewList.length > 0 && (
-            <div className="card-glass" style={{ padding: '1rem 1.25rem' }}>
-              <div className="row-between" style={{ marginBottom: '0.5rem' }}>
-                <h3 style={{ fontSize: '0.9rem' }}>📋 Review Tomorrow</h3>
+            <div className="card-glass gap-sm">
+              <div className="row-between">
+                <h3>Recommended Follow-Up Review</h3>
                 <button
-                  className="btn btn-ghost btn-sm"
-                  style={{ fontSize: '0.75rem' }}
-                  onClick={() => navigator.clipboard?.writeText(reviewList.join('\n'))}
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleCopyReview}
                 >
-                  📋 Copy
+                  {copied ? <IconCheck /> : <IconCopy />}
+                  <span>{copied ? 'Copied!' : 'Copy List'}</span>
                 </button>
               </div>
-              <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+              <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                 {reviewList.map((topic, i) => (
-                  <li key={i} style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', gap: '0.5rem' }}>
-                    <span style={{ color: 'var(--amber)' }}>→</span> {topic}
+                  <li key={i} className="row text-sm" style={{ color: 'var(--text-secondary)' }}>
+                    <span className="badge badge-amber">Review</span>
+                    <span>{topic}</span>
                   </li>
                 ))}
               </ul>
             </div>
           )}
 
-          <button id="restart-btn" className="btn btn-primary btn-lg" onClick={onRestart} style={{ width: '100%', justifyContent: 'center' }}>
-            ⚡ New Sprint
+          <button
+            type="button"
+            id="restart-btn"
+            className="btn btn-primary btn-lg btn-block"
+            onClick={onRestart}
+          >
+            <IconRotateCcw />
+            <span>Start a New Sprint</span>
           </button>
         </div>
       </div>
@@ -443,11 +540,19 @@ function CompletionScreen({ completed, skipped, analytics, totalBudget, onRestar
 }
 
 // ── Main SprintScreen ─────────────────────────────────────────────────────────
-export default function SprintScreen({ topics, initialPlan, totalBudget, contextType = 'exam', onRestart }) {
-  const [plan, setPlan] = useState(initialPlan) // remaining plan (shrinks as topics complete)
+export default function SprintScreen({
+  topics,
+  initialPlan,
+  totalBudget,
+  contextType = 'exam',
+  onBackToPlan,
+  onRestart,
+}) {
+  const [plan, setPlan] = useState(initialPlan)
   const [completedTopics, setCompletedTopics] = useState([])
   const [skippedTopics, setSkippedTopics] = useState([])
   const [done, setDone] = useState(false)
+  const [reallocatedCount, setReallocatedCount] = useState(0)
 
   // Per-topic state
   const [studyCard, setStudyCard] = useState('')
@@ -455,8 +560,8 @@ export default function SprintScreen({ topics, initialPlan, totalBudget, context
   const [cardError, setCardError] = useState(null)
   const [activeTab, setActiveTab] = useState('card') // 'card' | 'quiz'
 
-  // Analytics: track time spent and outcome per topic
-  const [topicAnalytics, setTopicAnalytics] = useState([]) // {topic, outcome, timeSpent, allocated}
+  // Analytics
+  const [topicAnalytics, setTopicAnalytics] = useState([])
   const topicStartTimeRef = useRef(Date.now())
 
   // Timer state
@@ -466,39 +571,23 @@ export default function SprintScreen({ topics, initialPlan, totalBudget, context
   const [timerActive, setTimerActive] = useState(true)
   const timerRef = useRef(null)
 
-  // Track elapsed budget for re-allocation
   const [budgetUsed, setBudgetUsed] = useState(0)
 
-  // Load study card when topic changes; also reset tab to 'card'
+  // Load study card when topic changes
   useEffect(() => {
     if (!currentTopic) return
     setStudyCard('')
     setCardLoading(true)
     setCardError(null)
-    setActiveTab('card')           // reset to card view on each new topic
+    setActiveTab('card')
     setRemainingSeconds(currentTopic.allocated_minutes * 60)
     setTimerActive(true)
     topicStartTimeRef.current = Date.now()
 
     getStudyCard(currentTopic.topic, currentTopic.depth_level, currentTopic.allocated_minutes, contextType)
-      .then(card => { setStudyCard(card); setCardLoading(false) })
-      .catch(err => { setCardError(err.message); setCardLoading(false) })
-  }, [currentTopic?.topic, currentTopic?.depth_level, currentTopic?.allocated_minutes])
-
-  // Countdown timer
-  useEffect(() => {
-    if (!timerActive || remainingSeconds <= 0) {
-      if (remainingSeconds <= 0 && timerActive) {
-        // Time's up — auto-advance
-        handleGotIt()
-      }
-      return
-    }
-    timerRef.current = setInterval(() => {
-      setRemainingSeconds(s => s - 1)
-    }, 1000)
-    return () => clearInterval(timerRef.current)
-  }, [timerActive, remainingSeconds])
+      .then((card) => { setStudyCard(card); setCardLoading(false) })
+      .catch((err) => { setCardError(err.message); setCardLoading(false) })
+  }, [currentTopic?.topic, currentTopic?.depth_level, currentTopic?.allocated_minutes, contextType])
 
   // Re-run allocation on remaining topics + remaining budget
   const reAllocate = useCallback(async (remainingTopics, remainingBudget) => {
@@ -509,30 +598,17 @@ export default function SprintScreen({ topics, initialPlan, totalBudget, context
     try {
       const newPlan = await allocate(remainingTopics, remainingBudget, contextType)
       setPlan(newPlan)
+      setReallocatedCount((c) => c + 1)
       return newPlan
     } catch {
-      // Fallback: just use remaining topics as-is
       setPlan(remainingTopics)
       return remainingTopics
     }
   }, [contextType])
 
-  // ── Keyboard shortcuts ─────────────────────────────────────────────────────
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
-      if (e.key === 'g' || e.key === 'G') handleGotIt()
-      if (e.key === 'm' || e.key === 'M') handleNeedMoreTime()
-      if (e.key === 's' || e.key === 'S') handleSkip()
-      if (e.key === '1') setActiveTab('card')
-      if (e.key === '2') setActiveTab('quiz')
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [handleGotIt, handleNeedMoreTime, handleSkip])
-
   // ── Controls ──────────────────────────────────────────────────────────────
   const handleGotIt = useCallback(async () => {
+    if (!currentTopic) return
     clearInterval(timerRef.current)
     setTimerActive(false)
 
@@ -541,17 +617,21 @@ export default function SprintScreen({ topics, initialPlan, totalBudget, context
     const newBudgetUsed = budgetUsed + topicUsed
     setBudgetUsed(newBudgetUsed)
 
-    // Record analytics
     const timeSpentSec = Math.round((Date.now() - topicStartTimeRef.current) / 1000)
-    setTopicAnalytics(prev => [...prev, {
-      topic: currentTopic.topic, outcome: 'got_it',
-      timeSpent: Math.round(timeSpentSec / 60), allocated: currentTopic.allocated_minutes,
-      importance: currentTopic.importance,
-    }])
+    setTopicAnalytics((prev) => [
+      ...prev,
+      {
+        topic: currentTopic.topic,
+        outcome: 'got_it',
+        timeSpent: Math.round(timeSpentSec / 60),
+        allocated: currentTopic.allocated_minutes,
+        importance: currentTopic.importance,
+      },
+    ])
 
-    setCompletedTopics(prev => [...prev, currentTopic])
+    setCompletedTopics((prev) => [...prev, currentTopic])
 
-    const remainingTopics = plan.slice(1).map(t => ({
+    const remainingTopics = plan.slice(1).map((t) => ({
       topic: t.topic,
       importance: t.importance,
       difficulty: t.difficulty,
@@ -569,16 +649,18 @@ export default function SprintScreen({ topics, initialPlan, totalBudget, context
   }, [remainingSeconds, currentTopic, plan, budgetUsed, totalBudget, reAllocate])
 
   const handleNeedMoreTime = useCallback(async () => {
+    if (!currentTopic) return
     clearInterval(timerRef.current)
     setTimerActive(false)
 
-    // Extend current topic by EXTEND_MINUTES (deducted from remaining budget)
-    const extended = { ...currentTopic, allocated_minutes: currentTopic.allocated_minutes + EXTEND_MINUTES }
+    const extended = {
+      ...currentTopic,
+      allocated_minutes: currentTopic.allocated_minutes + EXTEND_MINUTES,
+    }
     const newBudgetUsed = budgetUsed + EXTEND_MINUTES
     setBudgetUsed(newBudgetUsed)
 
-    // Re-allocate remaining (not current) topics with reduced budget
-    const remainingTopics = plan.slice(1).map(t => ({
+    const remainingTopics = plan.slice(1).map((t) => ({
       topic: t.topic,
       importance: t.importance,
       difficulty: t.difficulty,
@@ -588,26 +670,31 @@ export default function SprintScreen({ topics, initialPlan, totalBudget, context
     const newTail = await reAllocate(remainingTopics, remainingBudget)
 
     setPlan([extended, ...newTail])
-    setRemainingSeconds((extended.allocated_minutes) * 60)
+    setRemainingSeconds(extended.allocated_minutes * 60)
     setTimerActive(true)
   }, [currentTopic, plan, budgetUsed, totalBudget, reAllocate])
 
   const handleSkip = useCallback(async () => {
+    if (!currentTopic) return
     clearInterval(timerRef.current)
     setTimerActive(false)
 
-    // Record analytics for skip
     const timeSpentSec = Math.round((Date.now() - topicStartTimeRef.current) / 1000)
-    setTopicAnalytics(prev => [...prev, {
-      topic: currentTopic.topic, outcome: 'skipped',
-      timeSpent: Math.round(timeSpentSec / 60), allocated: currentTopic.allocated_minutes,
-      importance: currentTopic.importance,
-    }])
+    setTopicAnalytics((prev) => [
+      ...prev,
+      {
+        topic: currentTopic.topic,
+        outcome: 'skipped',
+        timeSpent: Math.round(timeSpentSec / 60),
+        allocated: currentTopic.allocated_minutes,
+        importance: currentTopic.importance,
+      },
+    ])
 
-    setSkippedTopics(prev => [...prev, currentTopic])
+    setSkippedTopics((prev) => [...prev, currentTopic])
     const savedTime = currentTopic.allocated_minutes
 
-    const remainingTopics = plan.slice(1).map(t => ({
+    const remainingTopics = plan.slice(1).map((t) => ({
       topic: t.topic,
       importance: t.importance,
       difficulty: t.difficulty,
@@ -624,7 +711,35 @@ export default function SprintScreen({ topics, initialPlan, totalBudget, context
     await reAllocate(remainingTopics, remainingBudget)
   }, [currentTopic, plan, budgetUsed, totalBudget, reAllocate])
 
-  // ── Completion ────────────────────────────────────────────────────────────
+  // Countdown timer effect
+  useEffect(() => {
+    if (!timerActive || remainingSeconds <= 0) {
+      if (remainingSeconds <= 0 && timerActive) {
+        handleGotIt()
+      }
+      return
+    }
+    timerRef.current = setInterval(() => {
+      setRemainingSeconds((s) => s - 1)
+    }, 1000)
+    return () => clearInterval(timerRef.current)
+  }, [timerActive, remainingSeconds, handleGotIt])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+      if (e.key === 'g' || e.key === 'G') handleGotIt()
+      if (e.key === 'm' || e.key === 'M') handleNeedMoreTime()
+      if (e.key === 's' || e.key === 'S') handleSkip()
+      if (e.key === '1') setActiveTab('card')
+      if (e.key === '2') setActiveTab('quiz')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [handleGotIt, handleNeedMoreTime, handleSkip])
+
+  // ── Completion View ───────────────────────────────────────────────────────
   if (done || (!currentTopic && completedTopics.length > 0)) {
     return (
       <CompletionScreen
@@ -639,120 +754,169 @@ export default function SprintScreen({ topics, initialPlan, totalBudget, context
 
   if (!currentTopic) {
     return (
-      <div className="page center">
-        <div className="card" style={{ textAlign: 'center' }}>
-          <p>No topics to study. <button className="btn btn-ghost btn-sm" onClick={onRestart}>Start over</button></p>
+      <div className="workspace-narrow center">
+        <div className="card gap-md" style={{ textAlign: 'center' }}>
+          <p>No topics remain in the active sprint queue.</p>
+          <button type="button" className="btn btn-primary" onClick={onRestart}>
+            Start Over
+          </button>
         </div>
       </div>
     )
   }
 
   const depthInfo = DEPTH_LABELS[currentTopic.depth_level] || DEPTH_LABELS.standard
+  const DepthIcon = depthInfo.Icon
+  const totalSprintTopics = completedTopics.length + plan.length
+  const currentSprintNumber = completedTopics.length + 1
+  const overallProgressPct = Math.round((completedTopics.length / Math.max(1, totalSprintTopics)) * 100)
 
   return (
-    <div className="page-wide">
-      {/* Sprint header */}
-      <div className="row-between" style={{ marginBottom: '1.5rem' }}>
-        <div className="row">
-          <span style={{ fontSize: '1.5rem' }}>⚡</span>
-          <div>
-            <h2 style={{ fontSize: '1.1rem' }}>Sprint Mode</h2>
-            <p className="text-muted text-sm">
-              Topic {completedTopics.length + 1} of {completedTopics.length + plan.length}
-            </p>
+    <div className="workspace-container">
+      {/* ── Sprint Subheader & Progress Bar ── */}
+      <div className="card-subtle gap-xs" style={{ marginBlockEnd: '1.5rem' }}>
+        <div className="row-between">
+          <div className="row">
+            <span className="badge badge-accent tabular">
+              Topic {currentSprintNumber} of {totalSprintTopics}
+            </span>
+            <span className={`badge ${depthInfo.cls}`}>
+              <DepthIcon />
+              <span>{depthInfo.label}</span>
+            </span>
+          </div>
+
+          <div className="row">
+            {onBackToPlan && (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={onBackToPlan}>
+                <IconArrowLeft />
+                <span>View Plan</span>
+              </button>
+            )}
+            <button type="button" className="btn btn-danger btn-sm" onClick={onRestart}>
+              <span>End Sprint</span>
+            </button>
           </div>
         </div>
-        <div className="row">
-          <span className={`badge depth-${currentTopic.depth_level}`}>
-            {depthInfo.icon} {depthInfo.label}
-          </span>
-          <button className="btn btn-ghost btn-sm" onClick={onRestart}>✕ End</button>
+
+        <div className="progress-track" role="progressbar" aria-valuenow={overallProgressPct} aria-valuemin={0} aria-valuemax={100}>
+          <div className="progress-fill" style={{ inlineSize: `${overallProgressPct}%` }} />
         </div>
       </div>
 
       <div className="sprint-layout">
-        {/* ── Main study area ── */}
+        {/* ── Main Study Column ── */}
         <div className="gap-lg">
-          {/* Topic + timer */}
-          <div className="card">
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1.5rem', flexWrap: 'wrap' }}>
-              <CountdownRing totalSeconds={totalSeconds} remainingSeconds={remainingSeconds} />
-              <div style={{ flex: 1 }}>
-                <h1 style={{ fontSize: 'clamp(1.25rem, 3vw, 2rem)', marginBottom: '0.5rem' }}>
-                  {currentTopic.topic}
-                </h1>
-                <div className="row" style={{ gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-                  <span className="badge badge-amber">★ Importance: {currentTopic.importance}/10</span>
-                  <span className="badge badge-accent">⚡ Difficulty: {currentTopic.difficulty}/10</span>
-                  <span className="badge badge-ghost">{currentTopic.allocated_minutes} min allocated</span>
+          {/* Active Topic Control Deck */}
+          <section className="card" aria-label="Current topic control deck">
+            <div className="row" style={{ alignItems: 'center', gap: '1.75rem' }}>
+              <CountdownRing
+                totalSeconds={totalSeconds}
+                remainingSeconds={remainingSeconds}
+                paused={!timerActive}
+                onTogglePause={() => setTimerActive((a) => !a)}
+              />
+
+              <div className="gap-md" style={{ flex: '1 1 20rem', minInlineSize: 0 }}>
+                <div className="gap-xs">
+                  <h1 style={{ fontSize: 'clamp(1.35rem, 1.1rem + 1.2vw, 1.85rem)' }}>
+                    {currentTopic.topic}
+                  </h1>
+                  <div className="row">
+                    <span className="badge badge-amber tabular">
+                      Importance {currentTopic.importance}/10
+                    </span>
+                    <span className="badge badge-ghost tabular">
+                      Difficulty {currentTopic.difficulty}/10
+                    </span>
+                    <span className="badge badge-accent tabular">
+                      <IconClock />
+                      <span>{currentTopic.allocated_minutes}m allocated</span>
+                    </span>
+                  </div>
                 </div>
 
-                {/* Controls */}
+                {/* Action Controls */}
                 <div className="btn-group">
-                  <button id="got-it-btn" className="btn btn-green" onClick={handleGotIt}>
-                    ✅ Got it
+                  <button
+                    type="button"
+                    id="got-it-btn"
+                    className="btn btn-emerald"
+                    onClick={handleGotIt}
+                  >
+                    <IconCheck />
+                    <span>Mark Complete</span>
+                    <span className="kbd-pill">G</span>
                   </button>
-                  <button id="more-time-btn" className="btn btn-amber" onClick={handleNeedMoreTime}>
-                    ⏱ Need +{EXTEND_MINUTES} min
+
+                  <button
+                    type="button"
+                    id="more-time-btn"
+                    className="btn btn-amber"
+                    onClick={handleNeedMoreTime}
+                  >
+                    <IconClock />
+                    <span>Extend +{EXTEND_MINUTES}m</span>
+                    <span className="kbd-pill">M</span>
                   </button>
-                  <button id="skip-btn" className="btn btn-danger btn-sm" onClick={handleSkip}>
-                    ⏭ Skip
+
+                  <button
+                    type="button"
+                    id="skip-btn"
+                    className="btn btn-ghost"
+                    onClick={handleSkip}
+                  >
+                    <IconSkipForward />
+                    <span>Skip Topic</span>
+                    <span className="kbd-pill">S</span>
                   </button>
                 </div>
               </div>
             </div>
-          </div>
+          </section>
 
-          {/* Study Card + Quiz Tab panel */}
-          <div className="card gap-md">
-            {/* Tab switcher */}
-            <div className="row-between">
-              <div className="row" style={{ gap: 0, background: 'var(--bg-base)', borderRadius: 'var(--radius-sm)', padding: 3, border: '1px solid var(--border)' }}>
+          {/* Study Notes & Practice Quiz Panel */}
+          <section className="card gap-md" aria-label="Study material and practice questions">
+            <div className="panel-header" style={{ marginBlockEnd: '0.25rem' }}>
+              <div className="segmented-tabs" role="tablist" aria-label="Study mode">
                 <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === 'card'}
                   id="tab-card"
+                  className={`seg-tab ${activeTab === 'card' ? 'active' : ''}`}
                   onClick={() => setActiveTab('card')}
-                  style={{
-                    padding: '0.35rem 0.9rem',
-                    borderRadius: 'var(--radius-sm)',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    fontSize: '0.82rem',
-                    fontWeight: 600,
-                    transition: 'all 0.2s ease',
-                    background: activeTab === 'card' ? 'var(--accent)' : 'transparent',
-                    color: activeTab === 'card' ? 'white' : 'var(--text-muted)',
-                  }}
                 >
-                  {depthInfo.icon} Study Card
+                  <IconBook />
+                  <span>Study Card</span>
+                  <span className="kbd-pill">1</span>
                 </button>
+
                 <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === 'quiz'}
                   id="tab-quiz"
+                  className={`seg-tab ${activeTab === 'quiz' ? 'active' : ''}`}
                   onClick={() => setActiveTab('quiz')}
-                  style={{
-                    padding: '0.35rem 0.9rem',
-                    borderRadius: 'var(--radius-sm)',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    fontSize: '0.82rem',
-                    fontWeight: 600,
-                    transition: 'all 0.2s ease',
-                    background: activeTab === 'quiz' ? 'var(--accent)' : 'transparent',
-                    color: activeTab === 'quiz' ? 'white' : 'var(--text-muted)',
-                  }}
                 >
-                  ❓ Practice Questions
+                  <IconHelpCircle />
+                  <span>Practice Quiz</span>
+                  <span className="kbd-pill">2</span>
                 </button>
               </div>
-              <span className={`badge depth-${currentTopic.depth_level}`}>{currentTopic.depth_level}</span>
+
+              <span className={`badge ${depthInfo.cls}`}>
+                <DepthIcon />
+                <span>{depthInfo.label} Depth</span>
+              </span>
             </div>
 
-            {/* Tab content */}
             {activeTab === 'card' ? (
               cardError ? (
-                <div className="toast-error" style={{ borderRadius: 'var(--radius-md)', padding: '0.75rem', position: 'static' }}>
-                  ⚠️ {cardError}
+                <div className="alert-banner alert-error" role="alert">
+                  <IconAlertCircle />
+                  <span>{cardError}</span>
                 </div>
               ) : (
                 <StudyCard content={studyCard} loading={cardLoading} />
@@ -765,14 +929,14 @@ export default function SprintScreen({ topics, initialPlan, totalBudget, context
                 contextType={contextType}
               />
             )}
-          </div>
+          </section>
         </div>
 
-        {/* ── Sidebar ── */}
+        {/* ── Live Queue Sidebar ── */}
         <PlanSidebar
           plan={plan}
-          currentIdx={0}
           completedTopics={completedTopics}
+          reallocatedCount={reallocatedCount}
         />
       </div>
     </div>
