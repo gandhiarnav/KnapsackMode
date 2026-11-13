@@ -5,11 +5,12 @@ Handles CORS, mounts all routers, and provides a health check endpoint.
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
 from dotenv import load_dotenv
 
-from routers import extract, allocate, studycard, quiz
+load_dotenv(Path(__file__).with_name(".env"))
 
-load_dotenv()
+from routers import extract, allocate, studycard, quiz
 
 app = FastAPI(
     title="KnapsackMode API",
